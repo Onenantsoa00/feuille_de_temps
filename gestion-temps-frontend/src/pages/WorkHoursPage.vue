@@ -1,7 +1,23 @@
+<!-- http://localhost:9000/#/work-hours -->
+
 <template>
     <q-page class="q-pa-md">
   
       <div class="text-h4 q-mb-md">Feuille de Temps</div>
+
+      <q-banner
+        v-if="!isOnlineState"
+        class="bg-red text-white q-mb-md"
+      >
+        Mode hors ligne - les données seront synchronisées plus tard
+      </q-banner>
+
+      <q-banner
+        v-else
+        class="bg-green text-white q-mb-md"
+      >
+        En ligne
+      </q-banner>
   
       <!-- FORMULAIRE -->
       <q-card class="q-mb-md">
@@ -41,7 +57,8 @@
               </q-item-section>
   
               <q-item-section side>
-                {{ item.duration }} h
+                <div v-if="item.offline">⏳ Sync...</div>
+                <div v-else>{{ item.duration }} h</div>
               </q-item-section>
             </q-item>
           </q-list>
@@ -54,10 +71,17 @@
   
   <script setup>
   import { ref, onMounted } from "vue";
+  import { Notify } from "quasar";
   import { api } from "src/boot/axios";
+  import {
+    addWorkHourLocal,
+    getWorkHoursLocal,
+    clearWorkHoursLocal,
+  } from "src/services/db";
   
   const tasks = ref([]);
   const workHours = ref([]);
+  const isOnlineState = ref(navigator.onLine);
   
   const form = ref({
     task_id: null,
@@ -74,14 +98,59 @@
   
   // charger heures
   const loadWorkHours = async () => {
-    const res = await api.get("/work-hours");
-    workHours.value = res.data;
+    try {
+      let serverData = [];
+
+      if (navigator.onLine) {
+        const res = await api.get("/work-hours");
+        serverData = res.data;
+      }
+
+      const localData = await getWorkHoursLocal();
+
+      const offlineFormatted = localData.map((item, index) => ({
+        ...item,
+        id: item.id ?? `offline-${index}-${item.work_date}-${item.start_time}`,
+        task_name: "⏳ (offline)",
+        duration: "?",
+        offline: true,
+      }));
+
+      workHours.value = [...offlineFormatted, ...serverData];
+    } catch (error) {
+      console.error(error);
+    }
   };
   
   // ajouter
   const addWorkHour = async () => {
     try {
-      await api.post("/work-hours", form.value);
+      if (navigator.onLine) {
+        await api.post("/work-hours", form.value);
+      } else {
+        const user = JSON.parse(localStorage.getItem("user"));
+
+        if (!user) {
+          console.error("Utilisateur non connecté !");
+          return;
+        }
+
+        const cleanData = {
+          user_id: user.id, // user_id requis pour la synchro locale/offline
+          task_id: form.value.task_id,
+          work_date: form.value.work_date,
+          start_time: form.value.start_time,
+          end_time: form.value.end_time,
+        };
+
+        console.log("DATA OFFLINE:", cleanData);
+        await addWorkHourLocal(cleanData);
+        console.log("Stocké en local (offline)");
+        Notify.create({
+          type: "warning",
+          message: "Enregistré en mode offline",
+        });
+      }
   
       form.value = {
         task_id: null,
@@ -90,12 +159,50 @@
         end_time: "",
       };
   
-      loadWorkHours();
+      loadWorkHours(); // 🔥 IMPORTANT
     } catch (error) {
       console.error(error);
     }
   };
   
+  const syncOfflineData = async () => {
+    const localData = await getWorkHoursLocal();
+
+    console.log("DATA A SYNC:", localData);
+
+    if (localData.length === 0) return;
+
+    try {
+      const res = await api.post("/sync/work-hours", {
+        workHours: localData,
+      });
+
+      console.log("REPONSE BACKEND:", res.data);
+
+      await clearWorkHoursLocal();
+
+      console.log("SYNC OK");
+      Notify.create({
+        type: "positive",
+        message: "Synchronisation réussie",
+      });
+
+      loadWorkHours(); // 🔥 IMPORTANT
+    } catch (error) {
+      console.error("SYNC ERROR", error);
+    }
+  };
+
+  window.addEventListener("online", () => {
+    isOnlineState.value = true;
+    console.log("Internet revenu !");
+    syncOfflineData();
+  });
+
+  window.addEventListener("offline", () => {
+    isOnlineState.value = false;
+  });
+
   onMounted(() => {
     loadTasks();
     loadWorkHours();

@@ -33,8 +33,11 @@ const login = async (req, res) => {
     );
 
     res.json({
-      message: "Connexion réussie",
       token,
+      user: {
+        id: user.id,
+        name: user.name,
+      },
     });
   } catch (error) {
     console.error(error);

@@ -15,11 +15,17 @@ export const useAuthStore = defineStore("auth", {
 
       this.token = response.data.token;
       localStorage.setItem("token", this.token);
+
+      // Stocke l'utilisateur pour la logique offline (ex: user_id en local)
+      if (response.data.user) {
+        localStorage.setItem("user", JSON.stringify(response.data.user));
+      }
     },
 
     logout() {
       this.token = null;
       localStorage.removeItem("token");
+      localStorage.removeItem("user");
     },
   },
 });
