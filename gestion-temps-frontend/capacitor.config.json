@@ -1,0 +1,5 @@
+{
+  "appId": "com.gestion.temps",
+  "appName": "Gestion Temps",
+  "webDir": "dist/spa"
+}
