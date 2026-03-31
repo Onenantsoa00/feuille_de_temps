@@ -3,11 +3,11 @@ const pool = require("../config/db");
 const caseSelect = `
     SELECT c.*,
            companies.name AS company_name,
-           users.name AS chef_name,
-           users.first_name AS chef_first_name
+           u.name AS chef_name,
+           u.first_name AS chef_first_name
     FROM cases c
     LEFT JOIN companies ON c.company_id = companies.id
-    LEFT JOIN users ON c.chef_id = users.id
+    LEFT JOIN users u ON c.user_id = u.id
 `;
 
 const getAllCases = async () => {
@@ -19,13 +19,13 @@ const getCasesForRole = async (userId, role) => {
   if (role === "admin" || role === "secretaire") {
     return getAllCases();
   }
-  if (role === "chef_mission") {
+  if (role === "chef") {
     const result = await pool.query(
       `${caseSelect}
-       WHERE c.chef_id = $1
+       WHERE c.user_id = $1
           OR c.id IN (SELECT case_id FROM case_assignments WHERE user_id = $1)
        ORDER BY c.id DESC`,
-      [userId]
+      [userId],
     );
     return result.rows;
   }
@@ -33,7 +33,7 @@ const getCasesForRole = async (userId, role) => {
     `${caseSelect}
      WHERE c.id IN (SELECT case_id FROM case_assignments WHERE user_id = $1)
      ORDER BY c.id DESC`,
-    [userId]
+    [userId],
   );
   return result.rows;
 };
@@ -43,17 +43,19 @@ const createCase = async (payload) => {
     name,
     description = null,
     company_id,
-    chef_id,
+    user_id, // 🔥 IMPORTANT
     start_date = null,
     end_date = null,
   } = payload;
+
   const result = await pool.query(
     `INSERT INTO cases
-      (name, description, company_id, chef_id, start_date, end_date)
+      (name, description, company_id, user_id, start_date, end_date)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [name, description, company_id, chef_id, start_date, end_date]
+    [name, description, company_id, user_id, start_date, end_date],
   );
+
   return result.rows[0];
 };
 
@@ -73,7 +75,7 @@ const replaceAssignments = async (caseId, userIds) => {
       await client.query(
         `INSERT INTO case_assignments (case_id, user_id) VALUES ($1, $2)
          ON CONFLICT DO NOTHING`,
-        [caseId, uid]
+        [caseId, uid],
       );
     }
     await client.query("COMMIT");
@@ -88,7 +90,7 @@ const replaceAssignments = async (caseId, userIds) => {
 const getAssignmentUserIds = async (caseId) => {
   const result = await pool.query(
     `SELECT user_id FROM case_assignments WHERE case_id = $1`,
-    [caseId]
+    [caseId],
   );
   return result.rows.map((r) => r.user_id);
 };
@@ -97,17 +99,17 @@ const userCanAccessCase = async (caseId, userId, role) => {
   const c = await getCaseById(caseId);
   if (!c) return false;
   if (role === "admin" || role === "secretaire") return true;
-  if (role === "chef_mission" && c.chef_id === userId) return true;
-  if (role === "chef_mission") {
+  if (role === "chef_mission" && c.user_id === userId) return true;
+  if (role === "chef") {
     const a = await pool.query(
       `SELECT 1 FROM case_assignments WHERE case_id = $1 AND user_id = $2`,
-      [caseId, userId]
+      [caseId, userId],
     );
     if (a.rows.length > 0) return true;
   }
   const r = await pool.query(
     `SELECT 1 FROM case_assignments WHERE case_id = $1 AND user_id = $2`,
-    [caseId, userId]
+    [caseId, userId],
   );
   return r.rows.length > 0;
 };

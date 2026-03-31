@@ -1,15 +1,15 @@
 const pool = require("../config/db");
 
-const PUBLIC_FIELDS = `id, name, first_name, email, role, company_id`;
+const PUBLIC_FIELDS = `id, name, first_name, email, role`;
 
 const createUser = async (user) => {
-  const { name, first_name, email, password, role, company_id = null } = user;
+  const { name, first_name, email, password, role } = user;
 
   const result = await pool.query(
-    `INSERT INTO users (name, first_name, email, password, role, company_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO users (name, first_name, email, password, role)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING ${PUBLIC_FIELDS}`,
-    [name, first_name, email, password, role, company_id]
+    [name, first_name, email, password, role]
   );
 
   return result.rows[0];

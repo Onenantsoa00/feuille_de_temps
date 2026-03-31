@@ -81,15 +81,17 @@ const getEntityCounts = async () => {
 /** Heures par jour, par société (via mission liée aux entrées) */
 const getHoursByDayAndCompany = async () => {
   const result = await pool.query(`
-    SELECT wh.work_date::text AS work_date,
-           comp.id AS company_id,
-           comp.name AS company_name,
-           COALESCE(
-             SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600),
-             0
-           ) AS hours
+    SELECT 
+      wh.work_date::text AS work_date,
+      comp.id AS company_id,
+      comp.name AS company_name,
+      COALESCE(
+        SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600),
+        0
+      ) AS hours
     FROM work_hours wh
-    JOIN cases c ON wh.case_id = c.id
+    JOIN tasks t ON wh.task_id = t.id
+    JOIN cases c ON t.case_id = c.id
     JOIN companies comp ON c.company_id = comp.id
     GROUP BY wh.work_date, comp.id, comp.name
     ORDER BY wh.work_date ASC, comp.name

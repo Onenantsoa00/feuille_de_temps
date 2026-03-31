@@ -28,19 +28,20 @@ const setAssignments = async (req, res) => {
     const { id: userId, role } = req.user;
 
     const mission = await caseModel.getCaseById(id);
-    if (!mission) return res.status(404).json({ message: "Mission introuvable" });
+    if (!mission)
+      return res.status(404).json({ message: "Mission introuvable" });
 
     if (
       role !== "admin" &&
       role !== "secretaire" &&
-      !(role === "chef_mission" && mission.chef_id === userId)
+      !(role === "chef_mission" && mission.user_id === userId)
     ) {
       return res.status(403).json({ message: "Accès refusé" });
     }
 
     await caseModel.replaceAssignments(
       id,
-      Array.isArray(employeeIds) ? employeeIds.map(Number) : []
+      Array.isArray(employeeIds) ? employeeIds.map(Number) : [],
     );
     const assigned = await caseModel.getAssignmentUserIds(id);
     res.json({ case_id: Number(id), employee_ids: assigned });
