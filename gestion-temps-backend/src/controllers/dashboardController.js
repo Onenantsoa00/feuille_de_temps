@@ -6,12 +6,16 @@ const getDashboard = async (req, res) => {
     const users = await dashboardModel.getUserStats();
     const tasks = await dashboardModel.getTaskStats();
     const daily = await dashboardModel.getDailyStats();
+    const counts = await dashboardModel.getEntityCounts();
+    const hoursByDayCompany = await dashboardModel.getHoursByDayAndCompany();
 
     res.json({
       global,
       users,
       tasks,
       daily,
+      counts,
+      hoursByDayCompany,
     });
   } catch (error) {
     console.error("DASHBOARD ERROR:", error);

@@ -25,9 +25,12 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Mot de passe incorrect" });
     }
 
-    // Générer token
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
@@ -37,6 +40,10 @@ const login = async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
+        first_name: user.first_name,
+        email: user.email,
+        role: user.role,
+        company_id: user.company_id ?? null,
       },
     });
   } catch (error) {

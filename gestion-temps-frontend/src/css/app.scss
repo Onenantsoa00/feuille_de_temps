@@ -1,1 +1,127 @@
-// app global css in SCSS form
+// app global css — base grise, animations, utilitaires
+@use "sass:color";
+
+// --- Surfaces ---
+body {
+  background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 38%, #e8edf3 100%);
+  min-height: 100vh;
+}
+
+.gt-page-title {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1e293b;
+}
+
+.gt-card {
+  border-radius: 16px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.25s ease;
+}
+
+.gt-card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.06),
+    0 16px 40px rgba(15, 23, 42, 0.1);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.gt-soft-surface {
+  background:
+    radial-gradient(ellipse 100% 80% at 50% -10%, rgba(226, 232, 240, 0.9) 0%, transparent 55%),
+    linear-gradient(155deg, #e2e8f0 0%, #f1f5f9 42%, #cbd5e1 100%);
+}
+
+.gt-list-item {
+  border-radius: 12px;
+  margin-bottom: 4px;
+  transition: background-color 0.25s ease, transform 0.2s ease;
+}
+
+.gt-list-item:hover {
+  background-color: rgba(71, 85, 105, 0.07);
+}
+
+// --- Animations d’entrée (pages / cartes) ---
+@keyframes gt-enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gt-fade-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.gt-enter-up {
+  animation: gt-enter-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.gt-delay-1 {
+  animation-delay: 0.07s;
+}
+
+.gt-delay-2 {
+  animation-delay: 0.14s;
+}
+
+.gt-delay-3 {
+  animation-delay: 0.21s;
+}
+
+.gt-fade-scale {
+  animation: gt-fade-scale 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+// --- Banners (statut) ---
+.gt-banner-offline {
+  border-radius: 14px;
+  background: linear-gradient(135deg, #475569 0%, #334155 100%);
+  color: #f8fafc;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
+}
+
+.gt-banner-online {
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+  color: #f0fdfa;
+  box-shadow: 0 8px 24px rgba(15, 118, 110, 0.2);
+}
+
+.gt-notif-unread {
+  background: rgba(71, 85, 105, 0.09) !important;
+  border-left: 3px solid rgba(71, 85, 105, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gt-card,
+  .gt-list-item {
+    transition: none;
+  }
+
+  .gt-enter-up,
+  .gt-fade-scale {
+    animation: none;
+  }
+}

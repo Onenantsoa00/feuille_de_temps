@@ -1,26 +1,50 @@
 const pool = require("../config/db");
 
-// Créer un utilisateur
+const PUBLIC_FIELDS = `id, name, first_name, email, role, company_id`;
+
 const createUser = async (user) => {
-  const { name, first_name, email, password, role } = user;
+  const { name, first_name, email, password, role, company_id = null } = user;
 
   const result = await pool.query(
-    `INSERT INTO users (name, first_name, email, password, role)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING *`,
-    [name, first_name, email, password, role]
+    `INSERT INTO users (name, first_name, email, password, role, company_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING ${PUBLIC_FIELDS}`,
+    [name, first_name, email, password, role, company_id]
   );
 
   return result.rows[0];
 };
 
-// Récupérer tous les utilisateurs
-const getAllUsers = async () => {
-  const result = await pool.query("SELECT * FROM users");
+const getAllUsers = async ({ role: roleFilter } = {}) => {
+  let sql = `SELECT ${PUBLIC_FIELDS} FROM users`;
+  const params = [];
+  if (roleFilter) {
+    sql += ` WHERE role = $1`;
+    params.push(roleFilter);
+  }
+  sql += ` ORDER BY id`;
+  const result = await pool.query(sql, params);
   return result.rows;
+};
+
+const getUserById = async (id) => {
+  const result = await pool.query(
+    `SELECT ${PUBLIC_FIELDS} FROM users WHERE id = $1`,
+    [id]
+  );
+  return result.rows[0] || null;
+};
+
+const findByEmailWithPassword = async (email) => {
+  const result = await pool.query("SELECT * FROM users WHERE email = $1", [
+    email,
+  ]);
+  return result.rows[0] || null;
 };
 
 module.exports = {
   createUser,
   getAllUsers,
+  getUserById,
+  findByEmailWithPassword,
 };

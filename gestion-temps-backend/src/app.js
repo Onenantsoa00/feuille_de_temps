@@ -6,6 +6,10 @@ const taskRoutes = require("./routes/taskRoutes");
 const workHourRoutes = require("./routes/workHourRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const syncRoutes = require("./routes/syncRoutes");
+const companyRoutes = require("./routes/companyRoutes");
+const caseRoutes = require("./routes/caseRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
+const messageRoutes = require("./routes/messageRoutes");
 const app = express();
 
 // Middleware
@@ -16,6 +20,10 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/work-hours", workHourRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/sync", syncRoutes);
+app.use("/api/companies", companyRoutes);
+app.use("/api/cases", caseRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/messages", messageRoutes);
 // Route test
 app.get("/", (req, res) => {
   res.send("API fonctionne !");

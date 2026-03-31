@@ -7,11 +7,12 @@ const syncWorkHours = async (req, res) => {
     for (const item of workHours) {
       await pool.query(
         `INSERT INTO work_hours 
-        (user_id, task_id, work_date, start_time, end_time)
-        VALUES ($1, $2, $3, $4, $5)`,
+        (user_id, task_id, case_id, work_date, start_time, end_time)
+        VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           item.user_id,
-          item.task_id,
+          item.task_id ?? null,
+          item.case_id ?? null,
           item.work_date,
           item.start_time,
           item.end_time,

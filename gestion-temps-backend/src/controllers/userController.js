@@ -1,10 +1,15 @@
 const bcrypt = require("bcrypt");
 const userModel = require("../models/userModel");
 
-// Ajouter un utilisateur
 const createUser = async (req, res) => {
   try {
-    const { name, first_name, email, password, role } = req.body;
+    const { name, first_name, email, password, role, company_id } = req.body;
+
+    if (!password || String(password).length < 6) {
+      return res
+        .status(400)
+        .json({ message: "Mot de passe requis (6 caractères minimum)" });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -14,6 +19,7 @@ const createUser = async (req, res) => {
       email,
       password: hashedPassword,
       role,
+      company_id: company_id ?? null,
     });
 
     res.status(201).json({
@@ -22,14 +28,17 @@ const createUser = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    if (error.code === "23505") {
+      return res.status(400).json({ message: "Cet email est déjà utilisé" });
+    }
     res.status(500).json({ message: "Erreur création user" });
   }
 };
 
-// Lister utilisateurs
 const getUsers = async (req, res) => {
   try {
-    const users = await userModel.getAllUsers();
+    const roleFilter = req.query.role || undefined;
+    const users = await userModel.getAllUsers({ role: roleFilter });
     res.json(users);
   } catch (error) {
     res.status(500).json({ message: "Erreur récupération users" });

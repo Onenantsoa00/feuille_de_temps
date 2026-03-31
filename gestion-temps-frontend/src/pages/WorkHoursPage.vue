@@ -3,33 +3,47 @@
 <template>
     <q-page class="q-pa-md">
   
-      <div class="text-h4 q-mb-md">Feuille de Temps</div>
+      <div class="text-h4 q-mb-md gt-page-title">Feuille de Temps</div>
 
       <q-banner
         v-if="!isOnlineState"
-        class="bg-red text-white q-mb-md"
+        class="gt-banner-offline q-mb-md"
       >
-        Mode hors ligne - les données seront synchronisées plus tard
+        Mode hors ligne — les données seront synchronisées plus tard
       </q-banner>
 
       <q-banner
         v-else
-        class="bg-green text-white q-mb-md"
+        class="gt-banner-online q-mb-md"
       >
         En ligne
       </q-banner>
   
       <!-- FORMULAIRE -->
-      <q-card class="q-mb-md">
+      <q-card class="q-mb-md gt-card gt-enter-up">
         <q-card-section>
   
             <q-select
+                v-model="form.case_id"
+                :options="cases"
+                option-label="caseLabel"
+                option-value="id"
+                emit-value
+                map-options
+                clearable
+                label="Mission (recommandé)"
+            />
+
+            <q-select
                 v-model="form.task_id"
+                class="q-mt-md"
                 :options="tasks"
                 option-label="name"
                 option-value="id"
                 emit-value
                 map-options
+                clearable
+                label="Tâche (optionnel / historique)"
             />
   
           <q-input v-model="form.work_date" type="date" label="Date" class="q-mt-md" />
@@ -41,24 +55,32 @@
         </q-card-section>
   
         <q-card-actions align="right">
-          <q-btn label="Ajouter" color="primary" @click="addWorkHour" />
+          <q-btn label="Ajouter" color="primary" unelevated class="action-btn" @click="addWorkHour" />
         </q-card-actions>
       </q-card>
   
       <!-- LISTE -->
-      <q-card>
+      <q-card class="gt-card gt-enter-up gt-delay-1">
         <q-card-section>
           <div class="text-subtitle1">Historique</div>
   
-          <q-list>
-            <q-item v-for="item in workHours" :key="item.id">
+          <q-list separator>
+            <q-item v-for="item in workHours" :key="item.id" class="gt-list-item">
               <q-item-section>
-                {{ item.task_name }} ({{ item.work_date }})
+                {{ lineLabel(item) }}
               </q-item-section>
   
               <q-item-section side>
                 <div v-if="item.offline">⏳ Sync...</div>
-                <div v-else>{{ item.duration }} h</div>
+                <div v-else>{{ calculateDuration(item.start_time, item.end_time) }} h</div>
+                <q-btn
+                  v-if="!item.offline"
+                  color="red"
+                  label="Supprimer"
+                  unelevated
+                  class="delete-btn"
+                  @click="deleteWorkHour(item.id)"
+                />
               </q-item-section>
             </q-item>
           </q-list>
@@ -73,27 +95,54 @@
   import { ref, onMounted } from "vue";
   import { Notify } from "quasar";
   import { api } from "src/boot/axios";
+  import { useAuthStore } from "src/stores/auth";
   import {
     addWorkHourLocal,
     getWorkHoursLocal,
     clearWorkHoursLocal,
   } from "src/services/db";
   
+  const authStore = useAuthStore();
+
   const tasks = ref([]);
+  const cases = ref([]);
   const workHours = ref([]);
   const isOnlineState = ref(navigator.onLine);
   
   const form = ref({
+    case_id: null,
     task_id: null,
     work_date: "",
     start_time: "",
     end_time: "",
   });
+
+  const caseLabel = (c) =>
+    `${c.name}${c.company_name ? ` — ${c.company_name}` : ""}`;
+
+  const lineLabel = (item) => {
+    const mission = item.case_name
+      ? `${item.case_name}${item.company_name ? ` (${item.company_name})` : ""}`
+      : null;
+    const task = item.task_name || null;
+    const head = mission || task || "—";
+    return `${head} — ${item.work_date}`;
+  };
+
+  const calculateDuration = (start, end) => {
+    const s = new Date(`1970-01-01T${start}`);
+    const e = new Date(`1970-01-01T${end}`);
+    return (e - s) / (1000 * 60 * 60);
+  };
   
-  // charger tâches
   const loadTasks = async () => {
     const res = await api.get("/tasks");
     tasks.value = res.data;
+  };
+
+  const loadCases = async () => {
+    const res = await api.get("/cases");
+    cases.value = res.data.map((c) => ({ ...c, caseLabel: caseLabel(c) }));
   };
   
   // charger heures
@@ -125,10 +174,17 @@
   // ajouter
   const addWorkHour = async () => {
     try {
+      if (!form.value.case_id && !form.value.task_id) {
+        Notify.create({
+          type: "warning",
+          message: "Choisissez une mission ou une tâche",
+        });
+        return;
+      }
       if (navigator.onLine) {
         await api.post("/work-hours", form.value);
       } else {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const user = authStore.user;
 
         if (!user) {
           console.error("Utilisateur non connecté !");
@@ -136,7 +192,8 @@
         }
 
         const cleanData = {
-          user_id: user.id, // user_id requis pour la synchro locale/offline
+          user_id: user.id,
+          case_id: form.value.case_id,
           task_id: form.value.task_id,
           work_date: form.value.work_date,
           start_time: form.value.start_time,
@@ -146,13 +203,15 @@
         console.log("DATA OFFLINE:", cleanData);
         await addWorkHourLocal(cleanData);
         console.log("Stocké en local (offline)");
-        Notify.create({
-          type: "warning",
-          message: "Enregistré en mode offline",
-        });
       }
+
+      Notify.create({
+        type: "positive",
+        message: "Feuille ajoutée",
+      });
   
       form.value = {
+        case_id: null,
         task_id: null,
         work_date: "",
         start_time: "",
@@ -160,6 +219,19 @@
       };
   
       loadWorkHours(); // 🔥 IMPORTANT
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const deleteWorkHour = async (id) => {
+    try {
+      await api.delete(`/work-hours/${id}`);
+      Notify.create({
+        type: "negative",
+        message: "Supprimé",
+      });
+      loadWorkHours();
     } catch (error) {
       console.error(error);
     }
@@ -205,6 +277,21 @@
 
   onMounted(() => {
     loadTasks();
+    loadCases();
     loadWorkHours();
   });
   </script>
+
+<style scoped>
+.action-btn,
+.delete-btn {
+  border-radius: 12px;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+}
+
+.action-btn:hover,
+.delete-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+</style>
