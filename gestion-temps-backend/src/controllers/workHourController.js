@@ -4,29 +4,17 @@ const pool = require("../config/db");
 
 const createWorkHour = async (req, res) => {
   try {
-    const { task_id, case_id, work_date, start_time, end_time } = req.body;
+    const { task_id, work_date, start_time, end_time } = req.body;
 
-    if (!task_id && !case_id) {
+    if (!task_id) {
       return res.status(400).json({
-        message: "Indiquez une tâche ou une mission",
+        message: "Une tâche est obligatoire",
       });
-    }
-
-    if (case_id) {
-      const ok = await caseModel.userCanAccessCase(
-        Number(case_id),
-        req.user.id,
-        req.user.role
-      );
-      if (!ok) {
-        return res.status(403).json({ message: "Mission non autorisée" });
-      }
     }
 
     const data = {
       user_id: req.user.id,
-      task_id: task_id ?? null,
-      case_id: case_id ?? null,
+      task_id,
       work_date,
       start_time,
       end_time,
@@ -62,7 +50,7 @@ const deleteWorkHour = async (req, res) => {
   try {
     const { id } = req.params;
 
-    await pool.query("DELETE FROM work_hours WHERE id = $1", [id]);
+    await pool.query("DELETE FROM work_hours WHERE work_hour_id = $1", [id]);
 
     res.json({ message: "Supprimé avec succès" });
   } catch (error) {
