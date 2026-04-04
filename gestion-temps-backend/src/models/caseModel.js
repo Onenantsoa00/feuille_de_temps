@@ -99,7 +99,7 @@ const userCanAccessCase = async (caseId, userId, role) => {
   const c = await getCaseById(caseId);
   if (!c) return false;
   if (role === "admin" || role === "secretaire") return true;
-  if (role === "chef_mission" && c.user_id === userId) return true;
+  if (role === "chef" && c.user_id === userId) return true;
   if (role === "chef") {
     const a = await pool.query(
       `SELECT 1 FROM case_assignments WHERE case_id = $1 AND user_id = $2`,

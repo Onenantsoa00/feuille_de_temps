@@ -14,8 +14,8 @@ router.get("/", verifyToken, getCases);
 router.post(
   "/",
   verifyToken,
-  requireRole("admin", "secretaire", "chef_mission"),
-  createCase
+  requireRole("admin", "secretaire", "chef"),
+  createCase,
 );
 router.get("/:id/assignments", verifyToken, getAssignments);
 router.put("/:id/assignments", verifyToken, setAssignments);
