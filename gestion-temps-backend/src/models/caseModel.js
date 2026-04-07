@@ -43,17 +43,17 @@ const createCase = async (payload) => {
     name,
     description = null,
     company_id,
-    user_id, // 🔥 IMPORTANT
+    chef_id,
     start_date = null,
     end_date = null,
   } = payload;
 
   const result = await pool.query(
     `INSERT INTO cases
-      (name, description, company_id, user_id, start_date, end_date)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING *`,
-    [name, description, company_id, user_id, start_date, end_date],
+    (name, description, company_id, user_id, start_date, end_date)
+   VALUES ($1, $2, $3, $4, $5, $6)
+   RETURNING *`,
+    [name, description, company_id, chef_id, start_date, end_date],
   );
 
   return result.rows[0];

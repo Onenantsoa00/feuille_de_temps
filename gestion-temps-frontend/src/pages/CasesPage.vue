@@ -29,6 +29,12 @@
           outlined
           dense
         />
+
+        <q-input v-model="description" label="Description" type="textarea" outlined dense />
+
+        <q-input v-model="start_date" label="Date début" type="date" outlined dense />
+
+        <q-input v-model="end_date" label="Date fin" type="date" outlined dense />
       </q-card-section>
 
       <q-card-actions align="right">
@@ -43,17 +49,15 @@
           <q-item v-for="c in cases" :key="c.id" class="gt-list-item">
             <q-item-section>
               <q-item-label>
-                {{ c.name }} — {{ c.company_name ?? "—" }} —
+                {{ c.name }} — {{ c.company_name ?? '—' }} —
                 {{ chefDisplay(c) }}
+              </q-item-label>
+              <q-item-label caption>
+                {{ c.description }} | {{ c.start_date }} → {{ c.end_date }}
               </q-item-label>
             </q-item-section>
             <q-item-section v-if="canAssignForCase(c)" side>
-              <q-btn
-                flat
-                color="primary"
-                label="Employés"
-                @click="openAssign(c)"
-              />
+              <q-btn flat color="primary" label="Employés" @click="openAssign(c)" />
             </q-item-section>
           </q-item>
         </q-list>
@@ -87,126 +91,135 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { Notify } from "quasar";
-import { api } from "src/boot/axios";
-import { useAuthStore } from "src/stores/auth";
+import { ref, computed, onMounted } from 'vue'
+import { Notify } from 'quasar'
+import { api } from 'src/boot/axios'
+import { useAuthStore } from 'src/stores/auth'
 
-const auth = useAuthStore();
+const auth = useAuthStore()
 
-const cases = ref([]);
-const companies = ref([]);
-const users = ref([]);
+const cases = ref([])
+const companies = ref([])
+const users = ref([])
 
-const name = ref("");
-const company_id = ref(null);
-const chef_id = ref(null);
+const name = ref('')
+const company_id = ref(null)
+const chef_id = ref(null)
+const description = ref('')
+const start_date = ref('')
+const end_date = ref('')
 
-const assignOpen = ref(false);
-const assignCase = ref(null);
-const assignSelected = ref([]);
+const assignOpen = ref(false)
+const assignCase = ref(null)
+const assignSelected = ref([])
 
-const chefs = computed(() =>
-  users.value.filter((u) => u.role === "chef_mission")
-);
+const chefs = computed(() => users.value.filter((u) => u.role === 'chef'))
 
-const employees = computed(() =>
-  users.value.filter((u) => u.role === "employe")
-);
+const employees = computed(() => users.value.filter((u) => u.role === 'employe'))
 
-const userLabel = (u) =>
-  [u.first_name, u.name].filter(Boolean).join(" ").trim() || u.email || `#${u.id}`;
+const userLabel = (u) => {
+  const fullName = [u.first_name, u.name].filter(Boolean).join(' ').trim()
+  return `${fullName} (${u.email})`
+}
 
 const chefDisplay = (c) => {
-  const a = [c.chef_first_name, c.chef_name].filter(Boolean).join(" ").trim();
-  return a || "—";
-};
+  const a = [c.chef_first_name, c.chef_name].filter(Boolean).join(' ').trim()
+  return a || '—'
+}
 
 const canAssignForCase = (c) => {
-  if (auth.isAdmin || auth.isSecretaire) return true;
-  if (auth.role === "chef_mission" && c.chef_id === auth.user?.id) return true;
-  return false;
-};
+  if (auth.isAdmin || auth.isSecretaire) return true
+  if (auth.role === 'chef' && c.user_id === auth.user?.id) return true
+  return false
+}
 
 const loadData = async () => {
   try {
     const [c, comp, u] = await Promise.all([
-      api.get("/cases"),
-      api.get("/companies"),
-      api.get("/users"),
-    ]);
+      api.get('/cases'),
+      api.get('/companies'),
+      api.get('/users'),
+    ])
 
-    cases.value = c.data;
-    companies.value = comp.data;
-    users.value = u.data;
+    cases.value = c.data
+    companies.value = comp.data
+    users.value = u.data
   } catch (e) {
-    console.error(e);
+    console.error(e)
     Notify.create({
-      type: "negative",
-      message: "Impossible de charger les missions",
-    });
+      type: 'negative',
+      message: 'Impossible de charger les missions',
+    })
   }
-};
+}
 
 const addCase = async () => {
   if (!name.value?.trim()) {
-    Notify.create({ type: "warning", message: "Indiquez un nom de mission" });
-    return;
+    Notify.create({ type: 'warning', message: 'Indiquez un nom de mission' })
+    return
   }
   try {
-    await api.post("/cases", {
+    await api.post('/cases', {
       name: name.value.trim(),
       company_id: company_id.value,
       chef_id: chef_id.value,
-    });
-    name.value = "";
-    company_id.value = null;
-    chef_id.value = null;
-    await loadData();
-    Notify.create({ type: "positive", message: "Mission ajoutée" });
+      description: description.value,
+      start_date: start_date.value,
+      end_date: end_date.value,
+    })
+    name.value = ''
+    company_id.value = null
+    chef_id.value = null
+    description.value = ''
+    start_date.value = ''
+    end_date.value = ''
+    await loadData()
+    Notify.create({ type: 'positive', message: 'Mission ajoutée' })
   } catch (e) {
-    console.error(e);
+    console.error(e)
     Notify.create({
-      type: "negative",
-      message: e.response?.data?.message ?? "Erreur à la création",
-    });
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur à la création',
+    })
   }
-};
+}
 
 const openAssign = async (c) => {
-  assignCase.value = c;
-  assignOpen.value = true;
+  assignCase.value = c
+  assignOpen.value = true
   try {
-    const res = await api.get(`/cases/${c.id}/assignments`);
-    assignSelected.value = [...(res.data.employee_ids || [])];
+    const res = await api.get(`/cases/${c.id}/assignments`)
+    assignSelected.value = [...(res.data.employee_ids || [])]
   } catch {
-    assignSelected.value = [];
+    assignSelected.value = []
   }
-};
+}
 
 const saveAssign = async () => {
   try {
     await api.put(`/cases/${assignCase.value.id}/assignments`, {
       employee_ids: assignSelected.value,
-    });
-    assignOpen.value = false;
-    Notify.create({ type: "positive", message: "Assignation enregistrée" });
-    await loadData();
+    })
+    assignOpen.value = false
+    Notify.create({ type: 'positive', message: 'Assignation enregistrée' })
+    await loadData()
   } catch (e) {
     Notify.create({
-      type: "negative",
-      message: e.response?.data?.message ?? "Erreur",
-    });
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur',
+    })
   }
-};
+}
 
-onMounted(loadData);
+onMounted(loadData)
 </script>
 
 <style scoped>
 .action-btn {
   border-radius: 12px;
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease;
 }
 
 .action-btn:hover {
