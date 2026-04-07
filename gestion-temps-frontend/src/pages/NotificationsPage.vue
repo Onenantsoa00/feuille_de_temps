@@ -2,12 +2,7 @@
   <q-page class="q-pa-md">
     <div class="row items-center q-mb-md">
       <div class="text-h4 gt-page-title col">Notifications</div>
-      <q-btn
-        flat
-        color="primary"
-        label="Tout marquer lu"
-        @click="markAll"
-      />
+      <q-btn flat color="primary" label="Tout marquer lu" @click="markAll" />
     </div>
 
     <q-card class="gt-card gt-enter-up">
@@ -20,8 +15,9 @@
           @click="markOne(n)"
         >
           <q-item-section>
-            <q-item-label class="text-weight-medium">{{ n.title }}</q-item-label>
-            <q-item-label caption>{{ n.body }}</q-item-label>
+            <q-item-label class="text-weight-medium">
+              {{ n.content }}
+            </q-item-label>
             <q-item-label caption>{{ formatDate(n.created_at) }}</q-item-label>
           </q-item-section>
         </q-item>
@@ -54,79 +50,106 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
-import { Notify } from "quasar";
-import { api } from "src/boot/axios";
-import { useAuthStore } from "src/stores/auth";
+import { ref, onMounted } from 'vue'
+import { Notify } from 'quasar'
+import { api } from 'src/boot/axios'
+import { useAuthStore } from 'src/stores/auth'
+import { socket } from 'src/boot/socket'
 
-const auth = useAuthStore();
-const items = ref([]);
-const users = ref([]);
-const sendForm = ref({ user_id: null, title: "", body: "" });
+const auth = useAuthStore()
+const items = ref([])
+const users = ref([])
+const sendForm = ref({ user_id: null, title: '', body: '' })
 
-const userLabel = (u) =>
-  [u.first_name, u.name].filter(Boolean).join(" ").trim() || u.email;
+const userLabel = (u) => [u.first_name, u.name].filter(Boolean).join(' ').trim() || u.email
 
 const formatDate = (iso) => {
-  if (!iso) return "";
+  if (!iso) return ''
   try {
-    return new Date(iso).toLocaleString();
+    return new Date(iso).toLocaleString()
   } catch {
-    return iso;
+    return iso
   }
-};
+}
 
 const load = async () => {
-  const res = await api.get("/notifications");
-  items.value = res.data;
-};
+  const res = await api.get('/notifications')
+  items.value = res.data
+}
 
 const loadUsers = async () => {
-  if (!auth.canSendAdminNotifications) return;
-  const res = await api.get("/users");
-  users.value = res.data;
-};
+  if (!auth.canSendAdminNotifications) return
+  const res = await api.get('/users')
+  users.value = res.data
+}
 
 const markOne = async (n) => {
-  if (n.read_at) return;
+  if (n.read_at) return
+
   try {
-    await api.patch(`/notifications/${n.id}/read`);
-    await load();
+    await api.patch(`/notifications/${n.id}/read`)
+
+    n.read_at = new Date() // 🔥 update local instantané
+
+    socket.emit('notificationRead', auth.user.id) // 🔥 dire au serveur
   } catch {
     /* ignore */
   }
-};
+}
 
 const markAll = async () => {
   try {
-    await api.post("/notifications/mark-all-read");
-    await load();
-    Notify.create({ type: "positive", message: "OK" });
+    await api.post('/notifications/mark-all-read')
+
+    items.value.forEach((n) => (n.read_at = new Date())) // 🔥 instant UI
+
+    socket.emit('notificationRead', auth.user.id)
+
+    Notify.create({ type: 'positive', message: 'OK' })
   } catch {
-    Notify.create({ type: "negative", message: "Erreur" });
+    Notify.create({ type: 'negative', message: 'Erreur' })
   }
-};
+}
 
 const sendNotif = async () => {
   try {
-    await api.post("/notifications", {
+    await api.post('/notifications', {
       user_id: sendForm.value.user_id,
       title: sendForm.value.title,
       body: sendForm.value.body,
-    });
-    sendForm.value = { user_id: null, title: "", body: "" };
-    Notify.create({ type: "positive", message: "Notification envoyée" });
+    })
+    sendForm.value = { user_id: null, title: '', body: '' }
+    Notify.create({ type: 'positive', message: 'Notification envoyée' })
   } catch (e) {
     Notify.create({
-      type: "negative",
-      message: e.response?.data?.message ?? "Erreur",
-    });
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur',
+    })
   }
-};
+}
 
 onMounted(async () => {
-  await load();
-  await loadUsers();
-});
-</script>
+  socket.emit('joinUserRoom', auth.user.id)
 
+  socket.on('newNotification', (notif) => {
+    items.value.unshift({
+      ...notif,
+      title: 'Nouvelle notification',
+      body: notif.content,
+      created_at: new Date(),
+    })
+
+    // 🔥 SON
+    const audio = new Audio('/notif.mp3')
+    audio.play()
+
+    Notify.create({
+      type: 'info',
+      message: notif.content,
+    })
+  })
+
+  await load()
+  await loadUsers()
+})
+</script>

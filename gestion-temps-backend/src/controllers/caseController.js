@@ -1,5 +1,5 @@
 const caseModel = require("../models/caseModel");
-
+const notificationModel = require("../models/notificationModel");
 const getCases = async (req, res) => {
   try {
     const { id, role } = req.user;
@@ -43,6 +43,18 @@ const setAssignments = async (req, res) => {
       id,
       Array.isArray(employeeIds) ? employeeIds.map(Number) : [],
     );
+
+    const io = req.app.get("io");
+
+    for (const employeeId of employeeIds) {
+      const notif = await notificationModel.create({
+        user_id: employeeId,
+        content: `Nouvelle mission assignée : ${mission.name}`,
+      });
+
+      io.to(`user_${employeeId}`).emit("newNotification", notif);
+    }
+
     const assigned = await caseModel.getAssignmentUserIds(id);
     res.json({ case_id: Number(id), employee_ids: assigned });
   } catch (error) {

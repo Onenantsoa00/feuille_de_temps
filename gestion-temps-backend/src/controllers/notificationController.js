@@ -23,10 +23,7 @@ const unreadCount = async (req, res) => {
 
 const markRead = async (req, res) => {
   try {
-    const row = await notificationModel.markRead(
-      req.params.id,
-      req.user.id
-    );
+    const row = await notificationModel.markRead(req.params.id, req.user.id);
     if (!row) return res.status(404).json({ message: "Introuvable" });
     res.json(row);
   } catch (e) {
@@ -46,14 +43,28 @@ const markAllRead = async (req, res) => {
 const createForUser = async (req, res) => {
   try {
     const { user_id, title, body } = req.body;
+
     if (!user_id || !title) {
       return res.status(400).json({ message: "user_id et title requis" });
     }
+
+    const content = `${title} - ${body || ""}`;
+
     const row = await notificationModel.create({
       user_id: Number(user_id),
-      title,
-      body,
+      content,
     });
+
+    // 🔥 SOCKET
+    const io = req.app.get("io");
+
+    io.to(`user_${user_id}`).emit("newNotification", row);
+
+    // 🔥 ENVOYER LE NOUVEAU COUNT
+    const count = await notificationModel.countUnread(user_id);
+
+    io.to(`user_${user_id}`).emit("notificationCount", count);
+
     res.status(201).json(row);
   } catch (e) {
     res.status(500).json({ message: "Erreur création notification" });

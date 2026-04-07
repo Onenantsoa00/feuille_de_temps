@@ -17,7 +17,15 @@
           />
           <q-btn flat dense no-caps label="Missions" to="/cases" class="nav-btn" />
           <q-btn flat dense no-caps label="Feuille de temps" to="/work-hours" class="nav-btn" />
-          <q-btn flat dense no-caps round icon="notifications_none" to="/notifications" class="nav-btn">
+          <q-btn
+            flat
+            dense
+            no-caps
+            round
+            icon="notifications_none"
+            to="/notifications"
+            class="nav-btn"
+          >
             <q-badge v-if="notifCount > 0" color="negative" floating>{{ notifCount }}</q-badge>
           </q-btn>
           <q-btn flat dense no-caps round icon="mail_outline" to="/messages" class="nav-btn" />
@@ -26,7 +34,15 @@
         <span v-if="auth.user" class="text-caption q-mr-sm gt-user-pill">
           {{ userShort }}
         </span>
-        <q-btn v-if="auth.token" flat dense no-caps label="Déconnexion" class="nav-btn" @click="logout" />
+        <q-btn
+          v-if="auth.token"
+          flat
+          dense
+          no-caps
+          label="Déconnexion"
+          class="nav-btn"
+          @click="logout"
+        />
       </q-toolbar>
     </q-header>
 
@@ -37,49 +53,56 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from "vue";
-import { useRouter } from "vue-router";
-import { useAuthStore } from "src/stores/auth";
-import { api } from "src/boot/axios";
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from 'src/stores/auth'
+import { api } from 'src/boot/axios'
+import { socket } from 'src/boot/socket'
 
-const auth = useAuthStore();
-const router = useRouter();
-const notifCount = ref(0);
-let timer;
+const auth = useAuthStore()
+const router = useRouter()
+const notifCount = ref(0)
+let timer
 
 const userShort = computed(() => {
-  const u = auth.user;
-  if (!u) return "";
-  const n = [u.first_name, u.name].filter(Boolean).join(" ");
-  return n || u.email || "";
-});
+  const u = auth.user
+  if (!u) return ''
+  const n = [u.first_name, u.name].filter(Boolean).join(' ')
+  return n || u.email || ''
+})
 
 const refreshNotif = async () => {
   if (!auth.token) {
-    notifCount.value = 0;
-    return;
+    notifCount.value = 0
+    return
   }
   try {
-    const res = await api.get("/notifications/unread-count");
-    notifCount.value = res.data?.count ?? 0;
+    const res = await api.get('/notifications/unread-count')
+    notifCount.value = res.data?.count ?? 0
   } catch {
-    notifCount.value = 0;
+    notifCount.value = 0
   }
-};
+}
 
 const logout = () => {
-  auth.logout();
-  router.push("/login");
-};
+  auth.logout()
+  router.push('/login')
+}
 
 onMounted(() => {
-  refreshNotif();
-  timer = setInterval(refreshNotif, 45000);
-});
+  refreshNotif()
+  timer = setInterval(refreshNotif, 45000)
+
+  // 🔥 ÉCOUTER LES UPDATES SOCKET
+  socket.on('notificationCount', (count) => {
+    notifCount.value = count
+  })
+})
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer);
-});
+  if (timer) clearInterval(timer)
+  socket.off('notificationCount')
+})
 </script>
 
 <style scoped>
@@ -133,6 +156,24 @@ onUnmounted(() => {
   to {
     opacity: 1;
   }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+:deep(.q-badge) {
+  animation: pop 0.3s ease;
 }
 
 .gt-user-pill {
