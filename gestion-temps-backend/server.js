@@ -36,8 +36,29 @@ async function start() {
 
     socket.on("notificationRead", async (userId) => {
       const count = await notificationModel.countUnread(userId);
-
       io.to(`user_${userId}`).emit("notificationCount", count);
+    });
+
+    // 🔥 TYPING INDICATOR
+    socket.on("typing", (data) => {
+      socket
+        .to(`user_${data.toUserId}`)
+        .emit("userTyping", { fromUserId: data.fromUserId });
+    });
+
+    socket.on("stopTyping", (data) => {
+      socket
+        .to(`user_${data.toUserId}`)
+        .emit("userStopTyping", { fromUserId: data.fromUserId });
+    });
+
+    // 🔥 READ RECEIPTS
+    socket.on("messageRead", (data) => {
+      // Émettre à l'expéditeur que ses messages ont été lus
+      socket.to(`user_${data.fromUserId}`).emit("messageRead", {
+        messageIds: data.messageIds,
+        readBy: data.readBy,
+      });
     });
 
     socket.on("disconnect", () => {

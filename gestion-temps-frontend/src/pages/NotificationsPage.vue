@@ -10,7 +10,7 @@
         <q-item
           v-for="n in items"
           :key="n.id"
-          :class="{ 'gt-notif-unread': !n.read_at }"
+          :class="{ 'bg-blue-1': !n.is_read }"
           clickable
           @click="markOne(n)"
         >
@@ -18,7 +18,7 @@
             <q-item-label class="text-weight-medium">
               {{ n.content }}
             </q-item-label>
-            <q-item-label caption>{{ formatDate(n.created_at) }}</q-item-label>
+            <q-item-label caption>{{ formatRelative(n.sent_at) }}</q-item-label>
           </q-item-section>
         </q-item>
         <q-item v-if="!items.length">
@@ -50,31 +50,47 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { Notify } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useAuthStore } from 'src/stores/auth'
 import { socket } from 'src/boot/socket'
+import { dayjs } from 'src/boot/dayjs'
 
 const auth = useAuthStore()
 const items = ref([])
 const users = ref([])
 const sendForm = ref({ user_id: null, title: '', body: '' })
 
+let timer = null
+
 const userLabel = (u) => [u.first_name, u.name].filter(Boolean).join(' ').trim() || u.email
 
-const formatDate = (iso) => {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
+const formatRelative = (date) => {
+  const now = dayjs()
+  const d = dayjs(date)
+
+  const diffSec = now.diff(d, 'second')
+
+  if (diffSec < 10) return "à l'instant"
+  if (diffSec < 60) return `${diffSec}s`
+
+  const diffMin = now.diff(d, 'minute')
+  if (diffMin < 60) return `${diffMin} min`
+
+  const diffHour = now.diff(d, 'hour')
+  if (diffHour < 24) return `${diffHour} h`
+
+  const diffDay = now.diff(d, 'day')
+  if (diffDay === 1) return 'hier'
+
+  return `${diffDay} jours`
 }
 
 const load = async () => {
   const res = await api.get('/notifications')
   items.value = res.data
+  items.value.sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at))
 }
 
 const loadUsers = async () => {
@@ -84,12 +100,12 @@ const loadUsers = async () => {
 }
 
 const markOne = async (n) => {
-  if (n.read_at) return
+  if (n.is_read) return
 
   try {
     await api.patch(`/notifications/${n.id}/read`)
 
-    n.read_at = new Date() // 🔥 update local instantané
+    n.is_read = true // 🔥 update local instantané
 
     socket.emit('notificationRead', auth.user.id) // 🔥 dire au serveur
   } catch {
@@ -101,7 +117,7 @@ const markAll = async () => {
   try {
     await api.post('/notifications/mark-all-read')
 
-    items.value.forEach((n) => (n.read_at = new Date())) // 🔥 instant UI
+    items.value.forEach((n) => (n.is_read = true)) // 🔥 instant UI
 
     socket.emit('notificationRead', auth.user.id)
 
@@ -136,8 +152,10 @@ onMounted(async () => {
       ...notif,
       title: 'Nouvelle notification',
       body: notif.content,
-      created_at: new Date(),
+      sent_at: new Date(),
+      is_read: false,
     })
+    items.value.sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at))
 
     // 🔥 SON
     const audio = new Audio('/notif.mp3')
@@ -151,5 +169,13 @@ onMounted(async () => {
 
   await load()
   await loadUsers()
+
+  timer = setInterval(() => {
+    items.value = [...items.value] // 🔥 force refresh UI
+  }, 60000) // toutes les 1 min
+})
+
+onUnmounted(() => {
+  clearInterval(timer)
 })
 </script>

@@ -34,15 +34,17 @@ export default defineRouter(function (/* { store, ssrContext } */) {
   })
 
   Router.beforeEach((to, from, next) => {
-    const publicPaths = ["/", "/login"];
+    const publicPaths = ['/', '/login']
 
-    if (!publicPaths.includes(to.path) && !localStorage.getItem("token")) {
-      next("/login");
-      return;
+    if (!publicPaths.includes(to.path) && !localStorage.getItem('token')) {
+      next('/login')
+      return
     }
 
-    next();
-  });
+    next()
+    //return true
+    //return { name: 'login' }
+  })
 
   return Router
 })
