@@ -2,9 +2,17 @@
 -- Exécuter une fois sur une base existante.
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_validated BOOLEAN NOT NULL DEFAULT true;
 
 ALTER TABLE work_hours ALTER COLUMN task_id DROP NOT NULL;
 ALTER TABLE work_hours ADD COLUMN IF NOT EXISTS case_id INTEGER REFERENCES cases(id);
+
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id);
+-- Status mission: 0 = pending validation, 1 = validated
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS status INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS validated_by INTEGER REFERENCES users(id);
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS validated_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS case_assignments (
   case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,

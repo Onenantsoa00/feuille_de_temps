@@ -13,6 +13,12 @@ function validateCreateUserRole(req, res, next) {
         .status(403)
         .json({ message: "La secrétaire ne peut créer que employé ou chef de mission" });
     }
+  } else if (actor === "chef_mission") {
+    if (role !== "employe") {
+      return res
+        .status(403)
+        .json({ message: "Le chef de mission ne peut créer que des employés" });
+    }
   } else if (actor !== "admin") {
     return res.status(403).json({ message: "Accès refusé" });
   }

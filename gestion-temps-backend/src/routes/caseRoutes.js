@@ -8,15 +8,24 @@ const {
   createCase,
   setAssignments,
   getAssignments,
+  getPendingCases,
+  validateCase,
 } = require("../controllers/caseController");
 
 router.get("/", verifyToken, getCases);
 router.post(
   "/",
   verifyToken,
-  requireRole("admin", "secretaire", "chef"),
+  requireRole("admin", "secretaire"),
   createCase,
 );
+router.get(
+  "/pending-validation",
+  verifyToken,
+  requireRole("admin"),
+  getPendingCases
+);
+router.put("/:id/validate", verifyToken, requireRole("admin"), validateCase);
 router.get("/:id/assignments", verifyToken, getAssignments);
 router.put("/:id/assignments", verifyToken, setAssignments);
 

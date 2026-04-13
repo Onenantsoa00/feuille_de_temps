@@ -55,6 +55,28 @@
         </q-list>
       </q-card-section>
     </q-card>
+
+    <q-card v-if="auth.isAdmin" class="gt-card gt-enter-up gt-delay-1 q-mt-md">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Employés en attente de validation</div>
+        <q-list bordered separator>
+          <q-item v-for="u in pendingEmployees" :key="`pending-user-${u.id}`" class="gt-list-item">
+            <q-item-section>
+              <q-item-label>
+                {{ [u.first_name, u.name].filter(Boolean).join(" ") || u.email }}
+              </q-item-label>
+              <q-item-label caption>{{ u.email }}</q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-btn color="primary" flat label="Valider" @click="approveEmployee(u.id)" />
+            </q-item-section>
+          </q-item>
+          <q-item v-if="pendingEmployees.length === 0">
+            <q-item-section>Aucun employé en attente.</q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+    </q-card>
   </q-page>
 </template>
 
@@ -75,13 +97,17 @@ const allRoles = [
 
 const roleOptions = computed(() => {
   if (auth.isAdmin) return allRoles;
-  return allRoles.filter((r) => ["chef_mission", "employe"].includes(r.value));
+  if (auth.isSecretaire) {
+    return allRoles.filter((r) => ["chef_mission", "employe"].includes(r.value));
+  }
+  return allRoles.filter((r) => r.value === "employe");
 });
 
 const roleLabel = (r) => allRoles.find((x) => x.value === r)?.label ?? r;
 
 const users = ref([]);
 const companies = ref([]);
+const pendingEmployees = ref([]);
 const form = ref({
   first_name: "",
   name: "",
@@ -95,6 +121,12 @@ const load = async () => {
   const [u, c] = await Promise.all([api.get("/users"), api.get("/companies")]);
   users.value = u.data;
   companies.value = c.data;
+  if (auth.isAdmin) {
+    const pending = await api.get("/users/pending-employee-validations");
+    pendingEmployees.value = pending.data;
+  } else {
+    pendingEmployees.value = [];
+  }
 };
 
 const create = async () => {
@@ -121,6 +153,19 @@ const create = async () => {
     Notify.create({
       type: "negative",
       message: e.response?.data?.message ?? "Erreur",
+    });
+  }
+};
+
+const approveEmployee = async (id) => {
+  try {
+    await api.put(`/users/${id}/validate`);
+    Notify.create({ type: "positive", message: "Employé validé" });
+    await load();
+  } catch (e) {
+    Notify.create({
+      type: "negative",
+      message: e.response?.data?.message ?? "Erreur validation employé",
     });
   }
 };

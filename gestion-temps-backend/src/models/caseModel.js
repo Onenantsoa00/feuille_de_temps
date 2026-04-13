@@ -1,4 +1,8 @@
 const pool = require("../config/db");
+const CASE_STATUS = {
+  PENDING: 0,
+  VALIDATED: 1,
+};
 
 const caseSelect = `
     SELECT c.*,
@@ -19,7 +23,7 @@ const getCasesForRole = async (userId, role) => {
   if (role === "admin" || role === "secretaire") {
     return getAllCases();
   }
-  if (role === "chef") {
+  if (role === "chef_mission" || role === "chef") {
     const result = await pool.query(
       `${caseSelect}
        WHERE c.user_id = $1
@@ -46,14 +50,25 @@ const createCase = async (payload) => {
     chef_id,
     start_date = null,
     end_date = null,
+    created_by = null,
+    status = CASE_STATUS.VALIDATED,
   } = payload;
 
   const result = await pool.query(
     `INSERT INTO cases
-    (name, description, company_id, user_id, start_date, end_date)
-   VALUES ($1, $2, $3, $4, $5, $6)
+    (name, description, company_id, user_id, start_date, end_date, created_by, status)
+   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
    RETURNING *`,
-    [name, description, company_id, chef_id, start_date, end_date],
+    [
+      name,
+      description,
+      company_id,
+      chef_id,
+      start_date,
+      end_date,
+      created_by,
+      status,
+    ],
   );
 
   return result.rows[0];
@@ -99,8 +114,8 @@ const userCanAccessCase = async (caseId, userId, role) => {
   const c = await getCaseById(caseId);
   if (!c) return false;
   if (role === "admin" || role === "secretaire") return true;
-  if (role === "chef" && c.user_id === userId) return true;
-  if (role === "chef") {
+  if ((role === "chef_mission" || role === "chef") && c.user_id === userId) return true;
+  if (role === "chef_mission" || role === "chef") {
     const a = await pool.query(
       `SELECT 1 FROM case_assignments WHERE case_id = $1 AND user_id = $2`,
       [caseId, userId],
@@ -114,6 +129,31 @@ const userCanAccessCase = async (caseId, userId, role) => {
   return r.rows.length > 0;
 };
 
+const getPendingCases = async () => {
+  const result = await pool.query(
+    `${caseSelect}
+     WHERE c.status = $1
+     ORDER BY c.id DESC`
+    ,
+    [CASE_STATUS.PENDING]
+  );
+  return result.rows;
+};
+
+const validateCase = async (id, adminId) => {
+  const result = await pool.query(
+    `UPDATE cases
+     SET status = $2,
+         validated_by = $3,
+         validated_at = NOW()
+     WHERE id = $1
+       AND status = $4
+     RETURNING *`,
+    [id, CASE_STATUS.VALIDATED, adminId, CASE_STATUS.PENDING]
+  );
+  return result.rows[0] || null;
+};
+
 module.exports = {
   getAllCases,
   getCasesForRole,
@@ -122,4 +162,6 @@ module.exports = {
   replaceAssignments,
   getAssignmentUserIds,
   userCanAccessCase,
+  getPendingCases,
+  validateCase,
 };

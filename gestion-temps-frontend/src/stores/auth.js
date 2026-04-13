@@ -18,15 +18,32 @@ export const useAuthStore = defineStore("auth", {
   }),
 
   getters: {
+    normalizedRole: (state) => {
+      const role = state.user?.role;
+      if (role === "chef_mission") return "chef";
+      return role ?? null;
+    },
     isAdmin: (state) => state.user?.role === "admin",
     isSecretaire: (state) => state.user?.role === "secretaire",
+    isChef: (state) => ["chef", "chef_mission"].includes(state.user?.role),
+    isEmploye: (state) => state.user?.role === "employe",
     role: (state) => state.user?.role ?? null,
     canManageCompanies: (state) =>
-      ["admin", "secretaire"].includes(state.user?.role),
+      ["admin", "secretaire"].includes(
+        state.user?.role === "chef_mission" ? "chef" : state.user?.role
+      ),
     canManageUsers: (state) =>
-      ["admin", "secretaire"].includes(state.user?.role),
+      ["admin"].includes(
+        state.user?.role === "chef_mission" ? "chef" : state.user?.role
+      ),
     canCreateMission: (state) =>
-      ["admin", "secretaire", "chef_mission"].includes(state.user?.role),
+      ["admin", "secretaire"].includes(
+        state.user?.role === "chef_mission" ? "chef" : state.user?.role
+      ),
+    canAccessCases: (state) =>
+      ["admin", "secretaire", "chef"].includes(
+        state.user?.role === "chef_mission" ? "chef" : state.user?.role
+      ),
     canSendAdminNotifications: (state) =>
       ["admin", "secretaire"].includes(state.user?.role),
   },

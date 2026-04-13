@@ -64,6 +64,42 @@
       </q-card-section>
     </q-card>
 
+    <div v-if="auth.isChef" class="row q-col-gutter-md q-mt-md">
+      <div v-for="c in chefMissions" :key="`chef-card-${c.id}`" class="col-12 col-sm-6 col-md-4">
+        <q-card class="gt-card">
+          <q-card-section>
+            <div class="text-subtitle1">{{ c.name }}</div>
+            <div class="text-caption text-grey-7">{{ c.company_name ?? '—' }}</div>
+            <div class="text-body2 q-mt-sm">{{ c.description || 'Sans description' }}</div>
+            <div class="text-caption q-mt-sm">{{ c.start_date }} → {{ c.end_date }}</div>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat color="primary" label="Gérer employés" @click="openAssign(c)" />
+          </q-card-actions>
+        </q-card>
+      </div>
+    </div>
+
+    <q-card v-if="auth.isAdmin" class="gt-card gt-enter-up gt-delay-1 q-mt-md">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Missions à valider</div>
+        <q-list bordered separator>
+          <q-item v-for="c in pendingCases" :key="`pending-${c.id}`" class="gt-list-item">
+            <q-item-section>
+              <q-item-label>{{ c.name }} — {{ c.company_name ?? '—' }}</q-item-label>
+              <q-item-label caption>{{ c.description || 'Sans description' }}</q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-btn color="primary" flat label="Valider" @click="validateCase(c.id)" />
+            </q-item-section>
+          </q-item>
+          <q-item v-if="pendingCases.length === 0">
+            <q-item-section>Aucune mission en attente.</q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+    </q-card>
+
     <q-dialog v-model="assignOpen">
       <q-card style="min-width: 320px">
         <q-card-section class="text-h6">Employés sur la mission</q-card-section>
@@ -101,6 +137,7 @@ const auth = useAuthStore()
 const cases = ref([])
 const companies = ref([])
 const users = ref([])
+const pendingCases = ref([])
 
 const name = ref('')
 const company_id = ref(null)
@@ -113,9 +150,14 @@ const assignOpen = ref(false)
 const assignCase = ref(null)
 const assignSelected = ref([])
 
-const chefs = computed(() => users.value.filter((u) => u.role === 'chef'))
+const chefs = computed(() =>
+  users.value.filter((u) => ['chef', 'chef_mission'].includes(u.role))
+)
 
 const employees = computed(() => users.value.filter((u) => u.role === 'employe'))
+const chefMissions = computed(() =>
+  cases.value.filter((c) => c.user_id === auth.user?.id)
+)
 
 const userLabel = (u) => {
   const fullName = [u.first_name, u.name].filter(Boolean).join(' ').trim()
@@ -129,7 +171,7 @@ const chefDisplay = (c) => {
 
 const canAssignForCase = (c) => {
   if (auth.isAdmin || auth.isSecretaire) return true
-  if (auth.role === 'chef' && c.user_id === auth.user?.id) return true
+  if (['chef', 'chef_mission'].includes(auth.role) && c.user_id === auth.user?.id) return true
   return false
 }
 
@@ -144,11 +186,30 @@ const loadData = async () => {
     cases.value = c.data
     companies.value = comp.data
     users.value = u.data
+    if (auth.isAdmin) {
+      const pending = await api.get('/cases/pending-validation')
+      pendingCases.value = pending.data
+    } else {
+      pendingCases.value = []
+    }
   } catch (e) {
     console.error(e)
     Notify.create({
       type: 'negative',
       message: 'Impossible de charger les missions',
+    })
+  }
+}
+
+const validateCase = async (id) => {
+  try {
+    await api.put(`/cases/${id}/validate`)
+    Notify.create({ type: 'positive', message: 'Mission validée' })
+    await loadData()
+  } catch (e) {
+    Notify.create({
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur de validation',
     })
   }
 }

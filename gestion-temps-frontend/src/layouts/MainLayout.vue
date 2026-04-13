@@ -5,17 +5,33 @@
         <q-toolbar-title class="text-weight-bold gt-brand">Gestion Temps</q-toolbar-title>
         <div class="gt-toolbar-nav row items-center no-wrap q-gutter-xs">
           <q-btn flat dense no-caps label="Accueil" to="/dashboard" class="nav-btn" />
-          <q-btn flat dense no-caps label="Sociétés" to="/companies" class="nav-btn" />
           <q-btn
-            v-if="auth.canManageUsers"
+            flat
+            dense
+            no-caps
+            label="Sociétés"
+            to="/companies"
+            class="nav-btn"
+            :disable="!canAccessCompanies"
+          />
+          <q-btn
             flat
             dense
             no-caps
             label="Comptes"
             to="/users"
             class="nav-btn"
+            :disable="!canAccessUsers"
           />
-          <q-btn flat dense no-caps label="Missions" to="/cases" class="nav-btn" />
+          <q-btn
+            flat
+            dense
+            no-caps
+            label="Missions"
+            to="/cases"
+            class="nav-btn"
+            :disable="!canAccessCases"
+          />
           <q-btn flat dense no-caps label="Feuille de temps" to="/work-hours" class="nav-btn" />
           <q-btn
             flat
@@ -70,6 +86,10 @@ const userShort = computed(() => {
   const n = [u.first_name, u.name].filter(Boolean).join(' ')
   return n || u.email || ''
 })
+
+const canAccessCompanies = computed(() => auth.canManageCompanies)
+const canAccessUsers = computed(() => auth.canManageUsers)
+const canAccessCases = computed(() => auth.canAccessCases)
 
 const refreshNotif = async () => {
   if (!auth.token) {

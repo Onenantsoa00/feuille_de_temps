@@ -33,17 +33,36 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     history: createHistory(process.env.VUE_ROUTER_BASE),
   })
 
-  Router.beforeEach((to, from, next) => {
+  Router.beforeEach((to) => {
     const publicPaths = ['/', '/login']
 
     if (!publicPaths.includes(to.path) && !localStorage.getItem('token')) {
-      next('/login')
-      return
+      return '/login'
     }
 
-    next()
-    //return true
-    //return { name: 'login' }
+    const raw = localStorage.getItem('user')
+    let role = null
+    if (raw) {
+      try {
+        role = JSON.parse(raw)?.role ?? null
+      } catch {
+        role = null
+      }
+    }
+    const normalizedRole = role === 'chef_mission' ? 'chef' : role
+
+    const restrictedPaths = {
+      '/companies': ['employe'],
+      '/users': ['chef', 'secretaire', 'employe'],
+      '/cases': ['employe'],
+    }
+
+    const deniedRoles = restrictedPaths[to.path]
+    if (deniedRoles?.includes(normalizedRole)) {
+      return '/dashboard'
+    }
+
+    return true
   })
 
   return Router

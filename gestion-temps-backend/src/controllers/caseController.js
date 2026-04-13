@@ -1,5 +1,9 @@
 const caseModel = require("../models/caseModel");
 const notificationModel = require("../models/notificationModel");
+const CASE_STATUS = {
+  PENDING: 0,
+  VALIDATED: 1,
+};
 const getCases = async (req, res) => {
   try {
     const { id, role } = req.user;
@@ -13,7 +17,15 @@ const getCases = async (req, res) => {
 
 const createCase = async (req, res) => {
   try {
-    const row = await caseModel.createCase(req.body);
+    const payload = {
+      ...req.body,
+      created_by: req.user.id,
+      status:
+        req.user.role === "secretaire"
+          ? CASE_STATUS.PENDING
+          : CASE_STATUS.VALIDATED,
+    };
+    const row = await caseModel.createCase(payload);
     res.status(201).json(row);
   } catch (error) {
     console.error("CREATE CASE ERROR:", error);
@@ -34,7 +46,7 @@ const setAssignments = async (req, res) => {
     if (
       role !== "admin" &&
       role !== "secretaire" &&
-      !(role === "chef_mission" && mission.user_id === userId)
+      !((role === "chef_mission" || role === "chef") && mission.user_id === userId)
     ) {
       return res.status(403).json({ message: "Accès refusé" });
     }
@@ -77,9 +89,36 @@ const getAssignments = async (req, res) => {
   }
 };
 
+const getPendingCases = async (_req, res) => {
+  try {
+    const rows = await caseModel.getPendingCases();
+    res.json(rows);
+  } catch (error) {
+    console.error("GET PENDING CASES ERROR:", error);
+    res.status(500).json({ message: "Erreur" });
+  }
+};
+
+const validateCase = async (req, res) => {
+  try {
+    const row = await caseModel.validateCase(Number(req.params.id), req.user.id);
+    if (!row) {
+      return res
+        .status(404)
+        .json({ message: "Mission introuvable ou déjà validée" });
+    }
+    res.json({ message: "Mission validée", case: row });
+  } catch (error) {
+    console.error("VALIDATE CASE ERROR:", error);
+    res.status(500).json({ message: "Erreur validation mission" });
+  }
+};
+
 module.exports = {
   getCases,
   createCase,
   setAssignments,
   getAssignments,
+  getPendingCases,
+  validateCase,
 };

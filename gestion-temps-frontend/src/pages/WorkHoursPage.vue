@@ -22,18 +22,15 @@
           map-options
           clearable
           label="Mission (recommandé)"
+          :hint="cases.length ? 'Affiche les missions autorisées pour votre compte' : 'Aucune mission disponible pour votre compte'"
         />
 
-        <q-select
-          v-model="form.task_id"
+        <q-input
+          v-model="form.task_name"
           class="q-mt-md"
-          :options="tasks"
-          option-label="name"
-          option-value="id"
-          emit-value
-          map-options
+          label="Tâche (optionnel)"
+          hint="Saisir le nom de la tâche"
           clearable
-          label="Tâche (optionnel / historique)"
         />
 
         <q-input v-model="form.work_date" type="date" label="Date" class="q-mt-md" />
@@ -41,6 +38,26 @@
         <q-input v-model="form.start_time" type="time" label="Heure début" class="q-mt-md" />
 
         <q-input v-model="form.end_time" type="time" label="Heure fin" class="q-mt-md" />
+
+        <div v-if="authStore.role === 'employe'" class="row q-gutter-sm q-mt-md">
+          <q-btn
+            label="Démarrer minuteur"
+            color="secondary"
+            unelevated
+            :disable="timerRunning"
+            @click="startTimer"
+          />
+          <q-btn
+            label="Arrêter minuteur"
+            color="deep-orange"
+            unelevated
+            :disable="!timerRunning"
+            @click="stopTimer"
+          />
+          <div v-if="timerRunning" class="text-caption self-center">
+            Minuteur en cours...
+          </div>
+        </div>
       </q-card-section>
 
       <q-card-actions align="right">
@@ -91,10 +108,11 @@ const tasks = ref([])
 const cases = ref([])
 const workHours = ref([])
 const isOnlineState = ref(navigator.onLine)
+const timerRunning = ref(false)
 
 const form = ref({
   case_id: null,
-  task_id: null,
+  task_name: '',
   work_date: '',
   start_time: '',
   end_time: '',
@@ -156,15 +174,47 @@ const loadWorkHours = async () => {
 // ajouter
 const addWorkHour = async () => {
   try {
-    if (!form.value.case_id && !form.value.task_id) {
+    if (!form.value.case_id && !form.value.task_name?.trim()) {
       Notify.create({
         type: 'warning',
         message: 'Choisissez une mission ou une tâche',
       })
       return
     }
+
+    let taskId = null
+    const taskName = form.value.task_name?.trim() || ''
+    if (taskName) {
+      const existing = tasks.value.find(
+        (t) => String(t.name || '').trim().toLowerCase() === taskName.toLowerCase()
+      )
+      if (existing) {
+        taskId = existing.id
+      } else if (navigator.onLine) {
+        const created = await api.post('/tasks', { name: taskName })
+        taskId = created.data?.id ?? null
+        if (created.data) {
+          tasks.value.unshift(created.data)
+        }
+      } else {
+        Notify.create({
+          type: 'warning',
+          message: 'Impossible de créer une nouvelle tâche hors ligne',
+        })
+        return
+      }
+    }
+
+    const payload = {
+      case_id: form.value.case_id,
+      task_id: taskId,
+      work_date: form.value.work_date,
+      start_time: form.value.start_time,
+      end_time: form.value.end_time,
+    }
+
     if (navigator.onLine) {
-      await api.post('/work-hours', form.value)
+      await api.post('/work-hours', payload)
     } else {
       const user = authStore.user
 
@@ -175,11 +225,7 @@ const addWorkHour = async () => {
 
       const cleanData = {
         user_id: user.id,
-        case_id: form.value.case_id,
-        task_id: form.value.task_id,
-        work_date: form.value.work_date,
-        start_time: form.value.start_time,
-        end_time: form.value.end_time,
+        ...payload,
       }
 
       console.log('DATA OFFLINE:', cleanData)
@@ -194,11 +240,12 @@ const addWorkHour = async () => {
 
     form.value = {
       case_id: null,
-      task_id: null,
+      task_name: '',
       work_date: '',
       start_time: '',
       end_time: '',
     }
+    timerRunning.value = false
 
     loadWorkHours() // 🔥 IMPORTANT
   } catch (error) {
@@ -252,6 +299,42 @@ const syncOfflineData = async () => {
   } catch (error) {
     console.error('SYNC ERROR', error)
   }
+}
+
+const nowAsTime = () => {
+  const now = new Date()
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mm = String(now.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
+const todayAsDate = () => {
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+const startTimer = () => {
+  if (!form.value.case_id) {
+    Notify.create({
+      type: 'warning',
+      message: 'Sélectionnez une mission avant de démarrer le minuteur',
+    })
+    return
+  }
+  if (!form.value.work_date) {
+    form.value.work_date = todayAsDate()
+  }
+  form.value.start_time = nowAsTime()
+  form.value.end_time = ''
+  timerRunning.value = true
+}
+
+const stopTimer = () => {
+  form.value.end_time = nowAsTime()
+  timerRunning.value = false
 }
 
 window.addEventListener('online', () => {
