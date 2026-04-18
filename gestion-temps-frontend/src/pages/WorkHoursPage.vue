@@ -78,7 +78,7 @@
 
             <q-item-section side>
               <div v-if="item.offline">⏳ Sync...</div>
-              <div v-else>{{ calculateDuration(item.start_time, item.end_time) }} h</div>
+              <div v-else>{{ clockRangeToDurationHHMM(item.start_time, item.end_time) }}</div>
               <q-btn
                 v-if="!item.offline"
                 color="red"
@@ -101,6 +101,7 @@ import { Notify } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useAuthStore } from 'src/stores/auth'
 import { addWorkHourLocal, getWorkHoursLocal, clearWorkHoursLocal } from 'src/services/db'
+import { clockRangeToDurationHHMM } from 'src/utils/formatDuration'
 
 const authStore = useAuthStore()
 
@@ -127,12 +128,6 @@ const lineLabel = (item) => {
   const task = item.task_name || null
   const head = mission || task || '—'
   return `${head} — ${item.work_date}`
-}
-
-const calculateDuration = (start, end) => {
-  const s = new Date(`1970-01-01T${start}`)
-  const e = new Date(`1970-01-01T${end}`)
-  return (e - s) / (1000 * 60 * 60)
 }
 
 const loadTasks = async () => {

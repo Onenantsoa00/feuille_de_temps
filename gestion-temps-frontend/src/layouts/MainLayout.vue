@@ -47,8 +47,12 @@
           <q-btn flat dense no-caps round icon="mail_outline" to="/messages" class="nav-btn" />
         </div>
         <q-space />
-        <span v-if="auth.user" class="text-caption q-mr-sm gt-user-pill">
-          {{ userShort }}
+        <span
+          v-if="auth.user"
+          class="text-caption q-mr-sm gt-user-pill"
+          :title="userPillTitle"
+        >
+          {{ userPill }}
         </span>
         <q-btn
           v-if="auth.token"
@@ -80,12 +84,18 @@ const router = useRouter()
 const notifCount = ref(0)
 let timer
 
-const userShort = computed(() => {
+/** Identité + rôle + email (utile pour les tests) */
+const userPill = computed(() => {
   const u = auth.user
   if (!u) return ''
-  const n = [u.first_name, u.name].filter(Boolean).join(' ')
-  return n || u.email || ''
+  const n = [u.first_name, u.name].filter(Boolean).join(' ').trim()
+  const identity = n || u.email || '—'
+  const role = u.role ?? '—'
+  const email = u.email ?? '—'
+  return `${identity} · ${role} · ${email}`
 })
+
+const userPillTitle = computed(() => userPill.value)
 
 const canAccessCompanies = computed(() => auth.canManageCompanies)
 const canAccessUsers = computed(() => auth.canManageUsers)
@@ -198,7 +208,7 @@ onUnmounted(() => {
 
 .gt-user-pill {
   opacity: 0.92;
-  max-width: 140px;
+  max-width: min(92vw, 520px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
