@@ -3,6 +3,11 @@ const CASE_STATUS = {
   PENDING: 0,
   VALIDATED: 1,
 };
+const normalizeRole = (role) => {
+  if (role === "chef" || role === "chef_mission") return "chef_de_mission";
+  if (role === "employe") return "collaborateur";
+  return role;
+};
 
 const caseSelect = `
     SELECT c.*,
@@ -20,24 +25,33 @@ const getAllCases = async () => {
 };
 
 const getCasesForRole = async (userId, role) => {
-  if (role === "admin" || role === "secretaire") {
+  const normalizedRole = normalizeRole(role);
+  if (
+    normalizedRole === "admin" ||
+    normalizedRole === "expert_comptable" ||
+    normalizedRole === "secretaire"
+  ) {
     return getAllCases();
   }
-  if (role === "chef_mission" || role === "chef") {
+  if (normalizedRole === "chef_de_mission") {
     const result = await pool.query(
       `${caseSelect}
-       WHERE c.user_id = $1
-          OR c.id IN (SELECT case_id FROM case_assignments WHERE user_id = $1)
+       WHERE c.status = $2
+         AND (
+           c.user_id = $1
+           OR c.id IN (SELECT case_id FROM case_assignments WHERE user_id = $1)
+         )
        ORDER BY c.id DESC`,
-      [userId],
+      [userId, CASE_STATUS.VALIDATED],
     );
     return result.rows;
   }
   const result = await pool.query(
     `${caseSelect}
-     WHERE c.id IN (SELECT case_id FROM case_assignments WHERE user_id = $1)
+     WHERE c.status = $2
+       AND c.id IN (SELECT case_id FROM case_assignments WHERE user_id = $1)
      ORDER BY c.id DESC`,
-    [userId],
+    [userId, CASE_STATUS.VALIDATED],
   );
   return result.rows;
 };
@@ -111,11 +125,23 @@ const getAssignmentUserIds = async (caseId) => {
 };
 
 const userCanAccessCase = async (caseId, userId, role) => {
+  const normalizedRole = normalizeRole(role);
   const c = await getCaseById(caseId);
   if (!c) return false;
-  if (role === "admin" || role === "secretaire") return true;
-  if ((role === "chef_mission" || role === "chef") && c.user_id === userId) return true;
-  if (role === "chef_mission" || role === "chef") {
+  const mustBeValidated =
+    normalizedRole === "chef_de_mission" || normalizedRole === "collaborateur";
+  if (mustBeValidated && c.status !== CASE_STATUS.VALIDATED) {
+    return false;
+  }
+  if (
+    normalizedRole === "admin" ||
+    normalizedRole === "expert_comptable" ||
+    normalizedRole === "secretaire"
+  ) {
+    return true;
+  }
+  if (normalizedRole === "chef_de_mission" && c.user_id === userId) return true;
+  if (normalizedRole === "chef_de_mission") {
     const a = await pool.query(
       `SELECT 1 FROM case_assignments WHERE case_id = $1 AND user_id = $2`,
       [caseId, userId],
@@ -132,10 +158,10 @@ const userCanAccessCase = async (caseId, userId, role) => {
 const getPendingCases = async () => {
   const result = await pool.query(
     `${caseSelect}
-     WHERE c.status = $1
+     WHERE COALESCE(c.status, $2) = $1
      ORDER BY c.id DESC`
     ,
-    [CASE_STATUS.PENDING]
+    [CASE_STATUS.PENDING, CASE_STATUS.VALIDATED]
   );
   return result.rows;
 };
@@ -147,7 +173,7 @@ const validateCase = async (id, adminId) => {
          validated_by = $3,
          validated_at = NOW()
      WHERE id = $1
-       AND status = $4
+       AND COALESCE(status, $2) = $4
      RETURNING *`,
     [id, CASE_STATUS.VALIDATED, adminId, CASE_STATUS.PENDING]
   );

@@ -2,13 +2,13 @@ const pool = require("../config/db");
 
 // créer
 const createTask = async (task) => {
-  const { name, description, work_location } = task;
+  const { name, description, work_location, case_id } = task;
 
   const result = await pool.query(
-    `INSERT INTO tasks (name, description, work_location)
-     VALUES ($1, $2, $3)
+    `INSERT INTO tasks (name, description, work_location, case_id)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [name, description, work_location]
+    [name, description, work_location, case_id ?? null]
   );
 
   return result.rows[0];

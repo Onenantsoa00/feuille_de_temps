@@ -51,13 +51,26 @@
               <q-item-label>
                 {{ c.name }} — {{ c.company_name ?? '—' }} —
                 {{ chefDisplay(c) }}
+                <q-badge
+                  v-if="Number(c.status) === 0"
+                  color="orange"
+                  outline
+                  class="q-ml-xs"
+                  label="En attente validation"
+                />
               </q-item-label>
               <q-item-label caption>
-                {{ c.description }} | {{ c.start_date }} → {{ c.end_date }}
+                {{ c.description }} | {{ formatDate(c.start_date) }} → {{ formatDate(c.end_date) }}
               </q-item-label>
             </q-item-section>
             <q-item-section v-if="canAssignForCase(c)" side>
               <q-btn flat color="primary" label="Employés" @click="openAssign(c)" />
+            </q-item-section>
+            <q-item-section
+              v-if="Number(c.status) === 0 && (auth.isAdmin || auth.isExpertComptable)"
+              side
+            >
+              <q-btn color="primary" flat label="Valider" @click="validateCase(c.id)" />
             </q-item-section>
           </q-item>
         </q-list>
@@ -71,7 +84,9 @@
             <div class="text-subtitle1">{{ c.name }}</div>
             <div class="text-caption text-grey-7">{{ c.company_name ?? '—' }}</div>
             <div class="text-body2 q-mt-sm">{{ c.description || 'Sans description' }}</div>
-            <div class="text-caption q-mt-sm">{{ c.start_date }} → {{ c.end_date }}</div>
+            <div class="text-caption q-mt-sm">
+              {{ formatDate(c.start_date) }} → {{ formatDate(c.end_date) }}
+            </div>
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat color="primary" label="Gérer employés" @click="openAssign(c)" />
@@ -80,7 +95,7 @@
       </div>
     </div>
 
-    <q-card v-if="auth.isAdmin" class="gt-card gt-enter-up gt-delay-1 q-mt-md">
+    <q-card v-if="auth.isAdmin || auth.isExpertComptable" class="gt-card gt-enter-up gt-delay-1 q-mt-md">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Missions à valider</div>
         <q-list bordered separator>
@@ -151,10 +166,14 @@ const assignCase = ref(null)
 const assignSelected = ref([])
 
 const chefs = computed(() =>
-  users.value.filter((u) => ['chef', 'chef_mission'].includes(u.role))
+  users.value.filter((u) =>
+    ['chef', 'chef_mission', 'chef_de_mission'].includes(u.role)
+  )
 )
 
-const employees = computed(() => users.value.filter((u) => u.role === 'employe'))
+const employees = computed(() =>
+  users.value.filter((u) => ['employe', 'collaborateur'].includes(u.role))
+)
 const chefMissions = computed(() =>
   cases.value.filter((c) => c.user_id === auth.user?.id)
 )
@@ -169,9 +188,17 @@ const chefDisplay = (c) => {
   return a || '—'
 }
 
+const formatDate = (value) => {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleDateString('fr-FR')
+}
+
 const canAssignForCase = (c) => {
+  if (Number(c.status) === 0 && !(auth.isAdmin || auth.isExpertComptable)) return false
   if (auth.isAdmin || auth.isSecretaire) return true
-  if (['chef', 'chef_mission'].includes(auth.role) && c.user_id === auth.user?.id) return true
+  if (['chef', 'chef_mission', 'chef_de_mission'].includes(auth.role) && c.user_id === auth.user?.id) return true
   return false
 }
 
@@ -186,7 +213,7 @@ const loadData = async () => {
     cases.value = c.data
     companies.value = comp.data
     users.value = u.data
-    if (auth.isAdmin) {
+    if (auth.isAdmin || auth.isExpertComptable) {
       const pending = await api.get('/cases/pending-validation')
       pendingCases.value = pending.data
     } else {
@@ -235,7 +262,13 @@ const addCase = async () => {
     start_date.value = ''
     end_date.value = ''
     await loadData()
-    Notify.create({ type: 'positive', message: 'Mission ajoutée' })
+    const isSec = auth.isSecretaire
+    Notify.create({
+      type: isSec ? 'info' : 'positive',
+      message: isSec
+        ? 'Mission enregistrée — en attente de validation par l’administrateur'
+        : 'Mission ajoutée',
+    })
   } catch (e) {
     console.error(e)
     Notify.create({

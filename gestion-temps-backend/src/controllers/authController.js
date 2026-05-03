@@ -25,9 +25,9 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Mot de passe incorrect" });
     }
 
-    if (user.role === "employe" && user.is_validated === false) {
+    if (["employe", "collaborateur"].includes(user.role) && user.is_validated === false) {
       return res.status(403).json({
-        message: "Votre compte employé doit être validé par un administrateur",
+        message: "Votre compte collaborateur doit être validé",
       });
     }
 

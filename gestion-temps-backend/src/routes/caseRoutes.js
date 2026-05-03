@@ -16,16 +16,21 @@ router.get("/", verifyToken, getCases);
 router.post(
   "/",
   verifyToken,
-  requireRole("admin", "secretaire"),
+  requireRole("admin", "expert_comptable", "secretaire"),
   createCase,
 );
 router.get(
   "/pending-validation",
   verifyToken,
-  requireRole("admin"),
+  requireRole("admin", "expert_comptable"),
   getPendingCases
 );
-router.put("/:id/validate", verifyToken, requireRole("admin"), validateCase);
+router.put(
+  "/:id/validate",
+  verifyToken,
+  requireRole("admin", "expert_comptable"),
+  validateCase
+);
 router.get("/:id/assignments", verifyToken, getAssignments);
 router.put("/:id/assignments", verifyToken, setAssignments);
 

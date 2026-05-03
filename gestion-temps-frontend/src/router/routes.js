@@ -16,6 +16,14 @@ const routes = [
         component: () => import("pages/DashboardPage.vue"),
       },
       {
+        path: "reports/missions",
+        component: () => import("pages/ReportsMissionsPage.vue"),
+      },
+      {
+        path: "reports/collaborateurs",
+        component: () => import("pages/ReportsCollaborateursPage.vue"),
+      },
+      {
         path: "work-hours",
         component: () => import("pages/WorkHoursPage.vue"),
       },

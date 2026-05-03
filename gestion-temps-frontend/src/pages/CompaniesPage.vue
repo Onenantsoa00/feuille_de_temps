@@ -11,6 +11,27 @@
           outlined
           dense
         />
+        <q-input
+          v-model="newDescription"
+          class="col-12 col-md-4"
+          label="Description"
+          outlined
+          dense
+        />
+        <q-input
+          v-model="newAddress"
+          class="col-12 col-md-6"
+          label="Adresse"
+          outlined
+          dense
+        />
+        <q-input
+          v-model="newContact"
+          class="col-12 col-md-6"
+          label="Contact"
+          outlined
+          dense
+        />
         <div class="col-12 col-md-4 flex items-end">
           <q-btn
             color="primary"
@@ -30,10 +51,16 @@
           <q-item v-for="c in companies" :key="c.id" class="gt-list-item">
             <q-item-section>
               <template v-if="editingId === c.id">
-                <q-input v-model="editName" dense outlined />
+                <q-input v-model="editName" dense outlined class="q-mb-xs" />
+                <q-input v-model="editDescription" dense outlined class="q-mb-xs" label="Description" />
+                <q-input v-model="editAddress" dense outlined class="q-mb-xs" label="Adresse" />
+                <q-input v-model="editContact" dense outlined label="Contact" />
               </template>
               <template v-else>
-                {{ c.name }}
+                <div class="text-subtitle2">{{ c.name }}</div>
+                <div class="text-caption text-grey-7">{{ c.description || "Sans description" }}</div>
+                <div class="text-caption text-grey-7">{{ c.address || "Adresse non renseignée" }}</div>
+                <div class="text-caption text-grey-7">{{ c.contact || "Contact non renseigné" }}</div>
               </template>
             </q-item-section>
             <q-item-section v-if="auth.canManageCompanies" side>
@@ -62,8 +89,14 @@ import { useAuthStore } from "src/stores/auth";
 const auth = useAuthStore();
 const companies = ref([]);
 const newName = ref("");
+const newDescription = ref("");
+const newAddress = ref("");
+const newContact = ref("");
 const editingId = ref(null);
 const editName = ref("");
+const editDescription = ref("");
+const editAddress = ref("");
+const editContact = ref("");
 
 const load = async () => {
   const res = await api.get("/companies");
@@ -76,8 +109,16 @@ const addCompany = async () => {
     return;
   }
   try {
-    await api.post("/companies", { name: newName.value.trim() });
+    await api.post("/companies", {
+      name: newName.value.trim(),
+      description: newDescription.value?.trim() || null,
+      address: newAddress.value?.trim() || null,
+      contact: newContact.value?.trim() || null,
+    });
     newName.value = "";
+    newDescription.value = "";
+    newAddress.value = "";
+    newContact.value = "";
     await load();
     Notify.create({ type: "positive", message: "Société ajoutée" });
   } catch (e) {
@@ -91,6 +132,9 @@ const addCompany = async () => {
 const startEdit = (c) => {
   editingId.value = c.id;
   editName.value = c.name;
+  editDescription.value = c.description || "";
+  editAddress.value = c.address || "";
+  editContact.value = c.contact || "";
 };
 
 const cancelEdit = () => {
@@ -99,7 +143,12 @@ const cancelEdit = () => {
 
 const saveEdit = async (id) => {
   try {
-    await api.put(`/companies/${id}`, { name: editName.value.trim() });
+    await api.put(`/companies/${id}`, {
+      name: editName.value.trim(),
+      description: editDescription.value?.trim() || null,
+      address: editAddress.value?.trim() || null,
+      contact: editContact.value?.trim() || null,
+    });
     editingId.value = null;
     await load();
     Notify.create({ type: "positive", message: "Mis à jour" });

@@ -39,7 +39,7 @@
 
         <q-input v-model="form.end_time" type="time" label="Heure fin" class="q-mt-md" />
 
-        <div v-if="authStore.role === 'employe'" class="row q-gutter-sm q-mt-md">
+        <div class="row q-gutter-sm q-mt-md">
           <q-btn
             label="Démarrer minuteur"
             color="secondary"
@@ -180,13 +180,20 @@ const addWorkHour = async () => {
     let taskId = null
     const taskName = form.value.task_name?.trim() || ''
     if (taskName) {
-      const existing = tasks.value.find(
-        (t) => String(t.name || '').trim().toLowerCase() === taskName.toLowerCase()
-      )
+      const existing = tasks.value.find((t) => {
+        const same =
+          String(t.name || '').trim().toLowerCase() === taskName.toLowerCase()
+        if (!same) return false
+        if (!form.value.case_id) return true
+        return Number(t.case_id) === Number(form.value.case_id)
+      })
       if (existing) {
         taskId = existing.id
       } else if (navigator.onLine) {
-        const created = await api.post('/tasks', { name: taskName })
+        const created = await api.post('/tasks', {
+          name: taskName,
+          case_id: form.value.case_id ?? null,
+        })
         taskId = created.data?.id ?? null
         if (created.data) {
           tasks.value.unshift(created.data)

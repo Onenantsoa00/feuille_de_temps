@@ -6,6 +6,24 @@
         <div class="gt-toolbar-nav row items-center no-wrap q-gutter-xs">
           <q-btn flat dense no-caps label="Accueil" to="/dashboard" class="nav-btn" />
           <q-btn
+            v-if="auth.isAdmin || auth.isExpertComptable"
+            flat
+            dense
+            no-caps
+            label="Rapport missions"
+            to="/reports/missions"
+            class="nav-btn"
+          />
+          <q-btn
+            v-if="auth.isAdmin || auth.isExpertComptable"
+            flat
+            dense
+            no-caps
+            label="Rapport collab."
+            to="/reports/collaborateurs"
+            class="nav-btn"
+          />
+          <q-btn
             flat
             dense
             no-caps

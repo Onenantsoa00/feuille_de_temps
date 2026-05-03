@@ -90,20 +90,31 @@ const auth = useAuthStore();
 
 const allRoles = [
   { label: "Administrateur", value: "admin" },
+  { label: "Expert comptable", value: "expert_comptable" },
   { label: "Secrétaire", value: "secretaire" },
-  { label: "Chef de mission", value: "chef_mission" },
-  { label: "Employé", value: "employe" },
+  { label: "Chef de mission", value: "chef_de_mission" },
+  { label: "Collaborateur", value: "collaborateur" },
 ];
 
 const roleOptions = computed(() => {
-  if (auth.isAdmin) return allRoles;
+  if (auth.isAdmin || auth.isExpertComptable) return allRoles;
   if (auth.isSecretaire) {
-    return allRoles.filter((r) => ["chef_mission", "employe"].includes(r.value));
+    return allRoles.filter((r) =>
+      ["chef_de_mission", "collaborateur"].includes(r.value)
+    );
   }
-  return allRoles.filter((r) => r.value === "employe");
+  return allRoles.filter((r) => r.value === "collaborateur");
 });
 
-const roleLabel = (r) => allRoles.find((x) => x.value === r)?.label ?? r;
+const roleLabel = (r) => {
+  const normalized =
+    r === "chef" || r === "chef_mission"
+      ? "chef_de_mission"
+      : r === "employe"
+        ? "collaborateur"
+        : r;
+  return allRoles.find((x) => x.value === normalized)?.label ?? normalized;
+};
 
 const users = ref([]);
 const companies = ref([]);
@@ -113,7 +124,7 @@ const form = ref({
   name: "",
   email: "",
   password: "",
-  role: "employe",
+  role: "collaborateur",
   company_id: null,
 });
 
@@ -144,7 +155,7 @@ const create = async () => {
       name: "",
       email: "",
       password: "",
-      role: auth.isSecretaire ? "employe" : "employe",
+      role: "collaborateur",
       company_id: null,
     };
     await load();
@@ -160,7 +171,7 @@ const create = async () => {
 const approveEmployee = async (id) => {
   try {
     await api.put(`/users/${id}/validate`);
-    Notify.create({ type: "positive", message: "Employé validé" });
+    Notify.create({ type: "positive", message: "Collaborateur validé" });
     await load();
   } catch (e) {
     Notify.create({

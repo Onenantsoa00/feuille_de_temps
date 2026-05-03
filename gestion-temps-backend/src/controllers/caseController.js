@@ -4,6 +4,11 @@ const CASE_STATUS = {
   PENDING: 0,
   VALIDATED: 1,
 };
+const normalizeRole = (role) => {
+  if (role === "chef" || role === "chef_mission") return "chef_de_mission";
+  if (role === "employe") return "collaborateur";
+  return role;
+};
 const getCases = async (req, res) => {
   try {
     const { id, role } = req.user;
@@ -37,7 +42,8 @@ const setAssignments = async (req, res) => {
   try {
     const { id } = req.params;
     const { employee_ids: employeeIds = [] } = req.body;
-    const { id: userId, role } = req.user;
+    const { id: userId } = req.user;
+    const role = normalizeRole(req.user.role);
 
     const mission = await caseModel.getCaseById(id);
     if (!mission)
@@ -45,8 +51,9 @@ const setAssignments = async (req, res) => {
 
     if (
       role !== "admin" &&
+      role !== "expert_comptable" &&
       role !== "secretaire" &&
-      !((role === "chef_mission" || role === "chef") && mission.user_id === userId)
+      !(role === "chef_de_mission" && mission.user_id === userId)
     ) {
       return res.status(403).json({ message: "Accès refusé" });
     }
@@ -103,9 +110,11 @@ const validateCase = async (req, res) => {
   try {
     const row = await caseModel.validateCase(Number(req.params.id), req.user.id);
     if (!row) {
-      return res
-        .status(404)
-        .json({ message: "Mission introuvable ou déjà validée" });
+      const existing = await caseModel.getCaseById(Number(req.params.id));
+      if (!existing) {
+        return res.status(404).json({ message: "Mission introuvable" });
+      }
+      return res.json({ message: "Mission déjà validée", case: existing });
     }
     res.json({ message: "Mission validée", case: row });
   } catch (error) {

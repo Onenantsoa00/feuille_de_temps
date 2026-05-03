@@ -1,4 +1,4 @@
--- Rôles attendus: admin, secretaire, chef_mission, employe
+-- Rôles attendus: admin, expert_comptable, secretaire, chef_de_mission, collaborateur
 -- Exécuter une fois sur une base existante.
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id);
@@ -7,6 +7,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_validated BOOLEAN NOT NULL DEFAULT
 
 ALTER TABLE work_hours ALTER COLUMN task_id DROP NOT NULL;
 ALTER TABLE work_hours ADD COLUMN IF NOT EXISTS case_id INTEGER REFERENCES cases(id);
+
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS contact TEXT;
 
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id);
 -- Status mission: 0 = pending validation, 1 = validated

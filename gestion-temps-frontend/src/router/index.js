@@ -49,16 +49,29 @@ export default defineRouter(function (/* { store, ssrContext } */) {
         role = null
       }
     }
-    const normalizedRole = role === 'chef_mission' ? 'chef' : role
+    const normalizedRole =
+      role === 'chef_mission' || role === 'chef'
+        ? 'chef_de_mission'
+        : role === 'employe'
+          ? 'collaborateur'
+          : role
 
     const restrictedPaths = {
-      '/companies': ['employe'],
-      '/users': ['chef', 'secretaire', 'employe'],
-      '/cases': ['employe'],
+      '/companies': ['collaborateur'],
+      '/users': ['chef_de_mission', 'secretaire', 'collaborateur'],
+      '/cases': ['collaborateur'],
     }
 
     const deniedRoles = restrictedPaths[to.path]
     if (deniedRoles?.includes(normalizedRole)) {
+      return '/dashboard'
+    }
+
+    const reportPaths = ['/reports/missions', '/reports/collaborateurs']
+    if (
+      reportPaths.includes(to.path) &&
+      !['admin', 'expert_comptable'].includes(normalizedRole)
+    ) {
       return '/dashboard'
     }
 

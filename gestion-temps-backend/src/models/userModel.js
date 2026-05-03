@@ -1,6 +1,11 @@
 const pool = require("../config/db");
 
 const PUBLIC_FIELDS = `id, name, first_name, email, role`;
+const normalizeRole = (role) => {
+  if (role === "chef" || role === "chef_mission") return "chef_de_mission";
+  if (role === "employe") return "collaborateur";
+  return role;
+};
 
 const createUser = async (user) => {
   const {
@@ -24,11 +29,11 @@ const createUser = async (user) => {
 };
 
 const getAllUsers = async ({ role: roleFilter, actor } = {}) => {
-  if (actor?.role === "chef_mission") {
+  if (normalizeRole(actor?.role) === "chef_de_mission") {
     const result = await pool.query(
       `SELECT DISTINCT ${PUBLIC_FIELDS}
        FROM users u
-       WHERE u.role = 'employe'
+       WHERE u.role IN ('collaborateur', 'employe')
          AND (
            u.created_by = $1
            OR u.id IN (
@@ -47,8 +52,9 @@ const getAllUsers = async ({ role: roleFilter, actor } = {}) => {
   let sql = `SELECT ${PUBLIC_FIELDS} FROM users`;
   const params = [];
   if (roleFilter) {
+    const normalizedRoleFilter = normalizeRole(roleFilter);
     sql += ` WHERE role = $1`;
-    params.push(roleFilter);
+    params.push(normalizedRoleFilter);
   }
   sql += ` ORDER BY id`;
   const result = await pool.query(sql, params);
@@ -74,7 +80,7 @@ const getPendingEmployeesCreatedByChefs = async () => {
   const result = await pool.query(
     `SELECT ${PUBLIC_FIELDS}
      FROM users
-     WHERE role = 'employe'
+     WHERE role IN ('collaborateur', 'employe')
        AND created_by IS NOT NULL
        AND COALESCE(is_validated, true) = false
      ORDER BY id`
@@ -87,7 +93,7 @@ const validateEmployee = async (id) => {
     `UPDATE users
      SET is_validated = true
      WHERE id = $1
-       AND role = 'employe'
+       AND role IN ('collaborateur', 'employe')
      RETURNING ${PUBLIC_FIELDS}`,
     [id]
   );

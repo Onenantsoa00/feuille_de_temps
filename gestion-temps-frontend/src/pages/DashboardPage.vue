@@ -1,6 +1,12 @@
 <template>
   <q-page class="q-pa-md">
-    <div class="text-h4 q-mb-md gt-page-title">Tableau de bord</div>
+    <div class="row items-center justify-between q-mb-md">
+      <div class="text-h4 gt-page-title">Tableau de bord</div>
+      <div v-if="isAdminLike" class="row q-gutter-xs no-wrap">
+        <q-btn flat dense color="primary" to="/reports/missions" label="Rapport missions" />
+        <q-btn flat dense color="primary" to="/reports/collaborateurs" label="Rapport collaborateurs" />
+      </div>
+    </div>
 
     <div class="row q-col-gutter-md q-mb-md">
       <q-card
@@ -15,13 +21,44 @@
       </q-card>
     </div>
 
+    <div
+      v-if="stats.role === 'admin' && (stats.deadlineAlerts || []).length"
+      class="column q-gutter-sm q-mb-md"
+    >
+      <q-banner
+        v-for="row in stats.deadlineAlerts"
+        :key="`${row.mission_id}-${row.alert_level}`"
+        rounded
+        dense
+        :class="
+          row.alert_level === 'overdue'
+            ? 'bg-red-1 text-red-10'
+            : 'bg-amber-1 text-amber-10'
+        "
+      >
+        <template #avatar>
+          <q-icon
+            size="sm"
+            :name="row.alert_level === 'overdue' ? 'event_busy' : 'schedule'"
+            :color="row.alert_level === 'overdue' ? 'negative' : 'warning'"
+          />
+        </template>
+        <div class="text-weight-medium">{{ row.mission_name }}</div>
+        <div class="text-caption">
+          Société : {{ row.company_name }} — Échéance : {{ formatDeadlineLabel(row.end_date) }}
+          <template v-if="row.alert_level === 'overdue'"> — date limite dépassée</template>
+          <template v-else> — échéance proche (7 jours)</template>
+        </div>
+      </q-banner>
+    </div>
+
     <q-card class="q-mb-md gt-card gt-enter-up gt-delay-1">
       <q-card-section>
         <div class="text-subtitle1 q-mb-md">
           {{
             useAdminBarChart
               ? "Activités récentes (projet, durée, auteur)"
-              : stats.role === "admin"
+              : isAdminLike
                 ? "Évolution des heures par mission"
                 : "Évolution des heures"
           }}
@@ -38,7 +75,7 @@
       </q-card-section>
     </q-card>
 
-    <q-card v-if="stats.role === 'admin' && stats.taskTraces?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
+    <q-card v-if="isAdminLike && stats.taskTraces?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Traces détaillées des tâches</div>
         <q-list separator>
@@ -54,6 +91,99 @@
             <q-item-section side>{{ decimalHoursToHHMM(trace.duration_hours) }}</q-item-section>
           </q-item>
         </q-list>
+      </q-card-section>
+    </q-card>
+
+    <q-card v-if="isAdminLike && stats.weeklyMissionSummaries?.length" class="q-mb-md gt-card">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Résumé missions hebdomadaire</div>
+        <q-list separator>
+          <q-item v-for="(item, idx) in stats.weeklyMissionSummaries.slice(0, 25)" :key="`wk-${idx}`">
+            <q-item-section>
+              <q-item-label>{{ item.mission_name }} — {{ item.company_name }}</q-item-label>
+              <q-item-label caption>Semaine: {{ item.period_start }} | Participants: {{ item.participants_count }}</q-item-label>
+            </q-item-section>
+            <q-item-section side>{{ decimalHoursToHHMM(item.total_hours) }}</q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+    </q-card>
+
+    <q-card v-if="isAdminLike && stats.monthlyMissionSummaries?.length" class="q-mb-md gt-card">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Résumé missions mensuel</div>
+        <q-list separator>
+          <q-item v-for="(item, idx) in stats.monthlyMissionSummaries.slice(0, 25)" :key="`mo-${idx}`">
+            <q-item-section>
+              <q-item-label>{{ item.mission_name }} — {{ item.company_name }}</q-item-label>
+              <q-item-label caption>Mois: {{ item.period_start }} | Participants: {{ item.participants_count }}</q-item-label>
+            </q-item-section>
+            <q-item-section side>{{ decimalHoursToHHMM(item.total_hours) }}</q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+    </q-card>
+
+    <q-card v-if="stats.role === 'collaborateur' && stats.collaboratorStats?.missionContributions?.length" class="q-mb-md gt-card">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Mes contributions par mission</div>
+        <q-list separator>
+          <q-item v-for="m in stats.collaboratorStats.missionContributions" :key="m.mission_id">
+            <q-item-section>
+              <q-item-label>{{ m.mission_name || 'Sans mission' }}</q-item-label>
+              <q-item-label caption>{{ m.company_name }}</q-item-label>
+            </q-item-section>
+            <q-item-section side>{{ decimalHoursToHHMM(m.total_hours) }}</q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+    </q-card>
+
+    <q-card v-if="isAdminLike && stats.topMissions?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Top missions</div>
+        <q-markup-table flat bordered dense>
+          <thead>
+            <tr>
+              <th>Mission</th>
+              <th>Société</th>
+              <th>Participants</th>
+              <th>Total heures</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="m in stats.topMissions" :key="m.mission_id">
+              <td>{{ m.mission_name }}</td>
+              <td>{{ m.company_name }}</td>
+              <td>{{ m.participants_count }}</td>
+              <td>{{ decimalHoursToHHMM(m.total_hours) }}</td>
+            </tr>
+          </tbody>
+        </q-markup-table>
+      </q-card-section>
+    </q-card>
+
+    <q-card v-if="isAdminLike && stats.topCollaborateurs?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Top collaborateurs</div>
+        <q-markup-table flat bordered dense>
+          <thead>
+            <tr>
+              <th>Nom</th>
+              <th>Email</th>
+              <th>Rôle</th>
+              <th>Total heures</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="u in stats.topCollaborateurs" :key="u.user_id">
+              <td>{{ u.user_name }}</td>
+              <td>{{ u.user_email }}</td>
+              <td>{{ u.user_role }}</td>
+              <td>{{ decimalHoursToHHMM(u.total_hours) }}</td>
+            </tr>
+          </tbody>
+        </q-markup-table>
       </q-card-section>
     </q-card>
 
@@ -73,8 +203,8 @@
       <q-card-section>
         <div class="text-subtitle1">Top tâches</div>
         <q-list separator>
-          <q-item v-for="task in stats.topTasks" :key="task.id" class="gt-list-item">
-            <q-item-section>{{ task.name }}</q-item-section>
+          <q-item v-for="task in stats.topTasks" :key="task.task_name || task.id" class="gt-list-item">
+            <q-item-section>{{ task.name || task.task_name }}</q-item-section>
             <q-item-section side>{{ decimalHoursToHHMM(task.total_hours) }}</q-item-section>
           </q-item>
         </q-list>
@@ -121,7 +251,18 @@ const stats = ref({
   taskTraces: [],
   topUsers: [],
   topTasks: [],
+  topMissions: [],
+  topCollaborateurs: [],
+  weeklyMissionSummaries: [],
+  monthlyMissionSummaries: [],
+  collaboratorStats: null,
+  deadlineAlerts: [],
+  printMode: { available: false, sections: [] },
 });
+
+const isAdminLike = computed(() =>
+  ["admin", "expert_comptable"].includes(stats.value.role)
+);
 
 const DURATION_CARD_KEYS = new Set(["heures", "week", "total"]);
 
@@ -130,6 +271,21 @@ function formatCardValue(card) {
     return decimalHoursToHHMM(card.value);
   }
   return card.value;
+}
+
+function formatDeadlineLabel(iso) {
+  if (!iso) return "—";
+  const d = new Date(String(iso).includes("T") ? iso : `${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString("fr-FR");
+}
+
+/** Affichage court des dates type YYYY-MM-DD (graphique admin). */
+function formatChartAxisDate(raw) {
+  if (!raw) return "";
+  const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return String(raw);
 }
 
 const PALETTE = [
@@ -155,16 +311,16 @@ function colorForMission(name) {
 }
 
 const adminBarTraces = computed(() =>
-  stats.value.role === "admin" ? (stats.value.taskTraces || []).slice(0, 40) : []
+  isAdminLike.value ? (stats.value.taskTraces || []).slice(0, 40) : []
 );
 
 const useAdminBarChart = computed(
-  () => stats.value.role === "admin" && adminBarTraces.value.length > 0
+  () => isAdminLike.value && adminBarTraces.value.length > 0
 );
 
 const hasLineChartData = computed(() => {
   if (useAdminBarChart.value) return false;
-  if (stats.value.role === "admin" && (stats.value.missionSeries || []).length > 0) {
+  if (isAdminLike.value && (stats.value.missionSeries || []).length > 0) {
     return true;
   }
   return (stats.value.hoursSeries || []).length > 0;
@@ -175,7 +331,7 @@ const hasAnyChart = computed(() => useAdminBarChart.value || hasLineChartData.va
 const adminBarChartData = computed(() => {
   const traces = adminBarTraces.value;
   return {
-    labels: traces.map((t, i) => `${i + 1}. ${t.work_date}`),
+    labels: traces.map((t, i) => `${i + 1}. ${formatChartAxisDate(t.work_date)}`),
     datasets: [
       {
         label: "Durée",
@@ -199,7 +355,7 @@ const adminBarChartOptions = computed(() => ({
         title: (items) => {
           const i = items[0]?.dataIndex;
           const t = adminBarTraces.value[i];
-          return t ? `Point ${i + 1} — ${t.work_date}` : "";
+          return t ? `Point ${i + 1} — ${formatChartAxisDate(t.work_date)}` : "";
         },
         label: (ctx) => {
           const i = ctx.dataIndex;
@@ -231,7 +387,7 @@ const adminBarChartOptions = computed(() => ({
 }));
 
 const lineChartData = computed(() => {
-  if (stats.value.role === "admin" && (stats.value.missionSeries || []).length) {
+  if (isAdminLike.value && (stats.value.missionSeries || []).length) {
     const rows = stats.value.missionSeries || [];
     const dates = [...new Set(rows.map((r) => r.work_date))].sort();
     const missionNames = [...new Set(rows.map((r) => r.mission_name))];
@@ -280,7 +436,7 @@ const lineChartData = computed(() => {
 
 const lineChartOptions = computed(() => {
   const isMissionLine =
-    stats.value.role === "admin" && (stats.value.missionSeries || []).length > 0;
+    isAdminLike.value && (stats.value.missionSeries || []).length > 0;
 
   return {
     responsive: true,
@@ -347,4 +503,5 @@ onMounted(() => {
 .chart-wrap {
   height: 360px;
 }
+
 </style>

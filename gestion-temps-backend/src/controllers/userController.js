@@ -1,5 +1,10 @@
 const bcrypt = require("bcrypt");
 const userModel = require("../models/userModel");
+const normalizeRole = (role) => {
+  if (role === "chef" || role === "chef_mission") return "chef_de_mission";
+  if (role === "employe") return "collaborateur";
+  return role;
+};
 
 const createUser = async (req, res) => {
   try {
@@ -21,7 +26,7 @@ const createUser = async (req, res) => {
       role,
       company_id: company_id ?? null,
       created_by: req.user.id,
-      is_validated: req.user.role === "chef_mission" ? false : true,
+      is_validated: normalizeRole(req.user.role) === "chef_de_mission" ? false : true,
     });
 
     res.status(201).json({

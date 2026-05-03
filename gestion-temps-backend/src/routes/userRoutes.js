@@ -20,20 +20,20 @@ router.get("/users", verifyToken, getUsers);
 router.post(
   "/users",
   verifyToken,
-  requireRole("admin", "secretaire", "chef_mission"),
+  requireRole("admin", "expert_comptable", "secretaire", "chef_de_mission", "chef_mission", "chef"),
   validateCreateUserRole,
   createUser
 );
 router.get(
   "/users/pending-employee-validations",
   verifyToken,
-  requireRole("admin"),
+  requireRole("admin", "expert_comptable"),
   getPendingEmployees
 );
 router.put(
   "/users/:id/validate",
   verifyToken,
-  requireRole("admin"),
+  requireRole("admin", "expert_comptable"),
   validateEmployee
 );
 

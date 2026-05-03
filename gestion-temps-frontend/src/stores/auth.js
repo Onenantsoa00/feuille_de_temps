@@ -20,32 +20,36 @@ export const useAuthStore = defineStore("auth", {
   getters: {
     normalizedRole: (state) => {
       const role = state.user?.role;
-      if (role === "chef_mission") return "chef";
-      return role ?? null;
+      if (role === "chef_mission" || role === "chef") return "chef_de_mission";
+      if (role === "employe") return "collaborateur";
+      return role || null;
     },
     isAdmin: (state) => state.user?.role === "admin",
+    isExpertComptable: (state) => state.user?.role === "expert_comptable",
     isSecretaire: (state) => state.user?.role === "secretaire",
-    isChef: (state) => ["chef", "chef_mission"].includes(state.user?.role),
-    isEmploye: (state) => state.user?.role === "employe",
+    isChef: (state) =>
+      ["chef", "chef_mission", "chef_de_mission"].includes(state.user?.role),
+    isEmploye: (state) =>
+      ["employe", "collaborateur"].includes(state.user?.role),
     role: (state) => state.user?.role ?? null,
     canManageCompanies: (state) =>
       ["admin", "secretaire"].includes(
-        state.user?.role === "chef_mission" ? "chef" : state.user?.role
+        state.user?.role === "chef_mission" ? "chef_de_mission" : state.user?.role
       ),
     canManageUsers: (state) =>
-      ["admin"].includes(
-        state.user?.role === "chef_mission" ? "chef" : state.user?.role
+      ["admin", "expert_comptable"].includes(
+        state.user?.role === "chef_mission" ? "chef_de_mission" : state.user?.role
       ),
     canCreateMission: (state) =>
-      ["admin", "secretaire"].includes(
-        state.user?.role === "chef_mission" ? "chef" : state.user?.role
+      ["admin", "expert_comptable", "secretaire"].includes(
+        state.user?.role === "chef_mission" ? "chef_de_mission" : state.user?.role
       ),
     canAccessCases: (state) =>
-      ["admin", "secretaire", "chef"].includes(
-        state.user?.role === "chef_mission" ? "chef" : state.user?.role
+      ["admin", "expert_comptable", "secretaire", "chef_de_mission"].includes(
+        state.user?.role === "chef_mission" ? "chef_de_mission" : state.user?.role
       ),
     canSendAdminNotifications: (state) =>
-      ["admin", "secretaire"].includes(state.user?.role),
+      ["admin", "expert_comptable", "secretaire"].includes(state.user?.role),
   },
 
   actions: {
