@@ -1,5 +1,6 @@
 const workHourModel = require("../models/workHourModel");
 const caseModel = require("../models/caseModel");
+const taskModel = require("../models/taskModel");
 const pool = require("../config/db");
 const normalizeRole = (role) => {
   if (role === "chef" || role === "chef_mission") return "chef_de_mission";
@@ -26,7 +27,8 @@ const createWorkHour = async (req, res) => {
       const tq = await pool.query(`SELECT case_id FROM tasks WHERE id = $1`, [
         task_id,
       ]);
-      taskCaseId = tq.rows[0]?.case_id ?? null;
+      const row = tq.rows[0];
+      taskCaseId = row && row.case_id != null ? row.case_id : null;
     }
 
     if (caseIdBody != null && taskCaseId != null && caseIdBody !== taskCaseId) {
@@ -35,7 +37,7 @@ const createWorkHour = async (req, res) => {
       });
     }
 
-    const caseIdForRow = caseIdBody ?? taskCaseId;
+    const caseIdForRow = caseIdBody != null ? caseIdBody : taskCaseId;
 
     if (caseIdForRow) {
       const ok = await caseModel.userCanAccessCase(
@@ -50,10 +52,34 @@ const createWorkHour = async (req, res) => {
       }
     }
 
+    let resolvedTaskId = task_id != null && task_id !== "" ? Number(task_id) : null;
+    if (!resolvedTaskId && caseIdForRow) {
+      const existing = await pool.query(
+        `SELECT id FROM tasks WHERE case_id = $1 ORDER BY id ASC LIMIT 1`,
+        [caseIdForRow]
+      );
+      if (existing.rows[0]) {
+        resolvedTaskId = existing.rows[0].id;
+      } else {
+        const created = await taskModel.createTask({
+          name: "Temps mission",
+          description: null,
+          work_location: null,
+          case_id: caseIdForRow,
+        });
+        resolvedTaskId = created.id;
+      }
+    }
+
+    if (!resolvedTaskId) {
+      return res.status(400).json({
+        message: "Une tâche valide est obligatoire (ou une mission pour créer la liaison)",
+      });
+    }
+
     const data = {
       user_id: req.user.id,
-      task_id: task_id ?? null,
-      case_id: caseIdForRow ?? null,
+      task_id: resolvedTaskId,
       work_date,
       start_time,
       end_time,

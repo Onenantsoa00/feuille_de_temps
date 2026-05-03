@@ -1,5 +1,4 @@
 const pool = require("../config/db");
-const { resolveWorkHourMissionIdExpr } = require("../config/workHoursSchema");
 
 const normalizeRole = (role) => {
   if (role === "chef" || role === "chef_mission") return "chef_de_mission";
@@ -212,7 +211,15 @@ const getAdminTaskTraces = async () => {
      FROM work_hours wh
      JOIN users u ON u.id = wh.user_id
      LEFT JOIN tasks t ON t.id = wh.task_id
-     LEFT JOIN cases c ON c.id = t.case_id
+     LEFT JOIN cases c ON c.id = COALESCE(
+       t.case_id,
+       (SELECT ca.case_id
+        FROM case_assignments ca
+        WHERE ca.user_id = wh.user_id
+          AND t.case_id IS NULL
+        ORDER BY ca.case_id
+        LIMIT 1)
+     )
      LEFT JOIN companies comp ON comp.id = c.company_id
      ORDER BY wh.work_date DESC, wh.work_hour_id DESC
      LIMIT 200`
