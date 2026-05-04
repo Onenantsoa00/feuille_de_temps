@@ -204,8 +204,11 @@ const getAdminTaskTraces = async () => {
   const result = await pool.query(
     `SELECT wh.work_date::text AS work_date,
             COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.name)), ''), u.email) AS user_name,
+            u.role AS user_role,
+            u.email AS user_email,
             COALESCE(t.name, '(sans tâche)') AS task_name,
             COALESCE(c.name, '(sans mission)') AS mission_name,
+            COALESCE(NULLIF(TRIM(CONCAT(ch.first_name, ' ', ch.name)), ''), ch.email, '(sans chef)') AS chef_name,
             COALESCE(comp.name, '(sans société)') AS company_name,
             ROUND(COALESCE(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600, 0)::numeric, 2) AS duration_hours
      FROM work_hours wh
@@ -221,10 +224,83 @@ const getAdminTaskTraces = async () => {
         LIMIT 1)
      )
      LEFT JOIN companies comp ON comp.id = c.company_id
+     LEFT JOIN users ch ON ch.id = c.user_id
      ORDER BY wh.work_date DESC, wh.work_hour_id DESC
      LIMIT 200`
   );
   return result.rows;
+};
+
+const getMissionDeadlines = async () => {
+  const result = await pool.query(
+    `SELECT c.id AS mission_id,
+            c.name AS mission_name,
+            COALESCE(comp.name, '—') AS company_name,
+            c.end_date::text AS end_date,
+            c.status
+     FROM cases c
+     LEFT JOIN companies comp ON comp.id = c.company_id
+     WHERE c.end_date IS NOT NULL
+     ORDER BY c.end_date ASC`
+  );
+  return result.rows;
+};
+
+const getScopedTaskTraces = async ({ userId, role }) => {
+  const normalizedRole = normalizeRole(role);
+  if (normalizedRole === "secretaire") {
+    return getAdminTaskTraces();
+  }
+  if (normalizedRole === "chef_de_mission") {
+    const result = await pool.query(
+      `SELECT wh.work_date::text AS work_date,
+              COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.name)), ''), u.email) AS user_name,
+              u.role AS user_role,
+              u.email AS user_email,
+              COALESCE(t.name, '(sans tâche)') AS task_name,
+              COALESCE(c.name, '(sans mission)') AS mission_name,
+              COALESCE(NULLIF(TRIM(CONCAT(ch.first_name, ' ', ch.name)), ''), ch.email, '(sans chef)') AS chef_name,
+              COALESCE(comp.name, '(sans société)') AS company_name,
+              ROUND(COALESCE(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600, 0)::numeric, 2) AS duration_hours
+       FROM work_hours wh
+       JOIN users u ON u.id = wh.user_id
+       LEFT JOIN tasks t ON t.id = wh.task_id
+       LEFT JOIN cases c ON c.id = t.case_id
+       LEFT JOIN companies comp ON comp.id = c.company_id
+       LEFT JOIN users ch ON ch.id = c.user_id
+       WHERE c.user_id = $1
+          OR c.id IN (SELECT case_id FROM case_assignments WHERE user_id = $1)
+       ORDER BY wh.work_date DESC, wh.work_hour_id DESC
+       LIMIT 200`,
+      [userId]
+    );
+    return result.rows;
+  }
+  if (normalizedRole === "collaborateur") {
+    const result = await pool.query(
+      `SELECT wh.work_date::text AS work_date,
+              COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.name)), ''), u.email) AS user_name,
+              u.role AS user_role,
+              u.email AS user_email,
+              COALESCE(t.name, '(sans tâche)') AS task_name,
+              COALESCE(c.name, '(sans mission)') AS mission_name,
+              COALESCE(NULLIF(TRIM(CONCAT(ch.first_name, ' ', ch.name)), ''), ch.email, '(sans chef)') AS chef_name,
+              COALESCE(comp.name, '(sans société)') AS company_name,
+              ROUND(COALESCE(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600, 0)::numeric, 2) AS duration_hours
+       FROM work_hours wh
+       JOIN users u ON u.id = wh.user_id
+       LEFT JOIN tasks t ON t.id = wh.task_id
+       LEFT JOIN cases c ON c.id = t.case_id
+       LEFT JOIN companies comp ON comp.id = c.company_id
+       LEFT JOIN users ch ON ch.id = c.user_id
+       WHERE wh.user_id = $1
+       ORDER BY wh.work_date DESC, wh.work_hour_id DESC
+       LIMIT 200`,
+      [userId]
+    );
+    return result.rows;
+  }
+  return [];
 };
 
 const getCollaborateurStats = async ({ userId }) => {
@@ -293,6 +369,7 @@ const getRoleDashboard = async ({ userId, role }) => {
       missionParticipation,
       topMissions,
       topCollaborateurs,
+      missionDeadlines,
     ] = await Promise.all([
       getEntityCounts(),
       getAdminTaskTraces(),
@@ -301,6 +378,7 @@ const getRoleDashboard = async ({ userId, role }) => {
       getMissionParticipationDetails(),
       getTopMissions(10),
       getTopCollaborateurs(10),
+      getMissionDeadlines(),
     ]);
 
     const totalHours = taskTraces.reduce(
@@ -323,6 +401,7 @@ const getRoleDashboard = async ({ userId, role }) => {
       topTasks: [],
       topMissions,
       topCollaborateurs,
+      missionDeadlines,
       printMode: {
         available: true,
         reportLinks: true,
@@ -336,7 +415,10 @@ const getRoleDashboard = async ({ userId, role }) => {
   }
 
   if (normalizedRole === "collaborateur") {
-    const collaboratorStats = await getCollaborateurStats({ userId });
+    const [collaboratorStats, taskTraces] = await Promise.all([
+      getCollaborateurStats({ userId }),
+      getScopedTaskTraces({ userId, role: normalizedRole }),
+    ]);
     return {
       role: normalizedRole,
       cards: [
@@ -348,7 +430,7 @@ const getRoleDashboard = async ({ userId, role }) => {
         },
         { key: "tasks", label: "Taches actives", value: collaboratorStats.topTasks.length },
       ],
-      taskTraces: [],
+      taskTraces,
       missionSeries: [],
       hoursSeries: collaboratorStats.monthlyHours.map((r) => ({
         work_date: r.month_start,
@@ -364,6 +446,35 @@ const getRoleDashboard = async ({ userId, role }) => {
       monthlyMissionSummaries: [],
       missionParticipation: [],
       collaboratorStats,
+      missionDeadlines: [],
+    };
+  }
+
+  if (normalizedRole === "secretaire" || normalizedRole === "chef_de_mission") {
+    const taskTraces = await getScopedTaskTraces({ userId, role: normalizedRole });
+    const totalHours = taskTraces.reduce(
+      (acc, row) => acc + Number(row.duration_hours || 0),
+      0
+    );
+    return {
+      role: normalizedRole,
+      cards: [
+        { key: "heures", label: "Heures totales", value: totalHours },
+        { key: "traces", label: "Saisies", value: taskTraces.length },
+      ],
+      taskTraces: taskTraces.slice(0, 120),
+      missionSeries: [],
+      hoursSeries: [],
+      topUsers: [],
+      topTasks: [],
+      topMissions: [],
+      topCollaborateurs: [],
+      printMode: { available: true, sections: ["traces"] },
+      weeklyMissionSummaries: [],
+      monthlyMissionSummaries: [],
+      missionParticipation: [],
+      collaboratorStats: null,
+      missionDeadlines: [],
     };
   }
 
@@ -380,6 +491,7 @@ const getRoleDashboard = async ({ userId, role }) => {
     monthlyMissionSummaries: [],
     missionParticipation: [],
     collaboratorStats: null,
+    missionDeadlines: [],
   };
 };
 

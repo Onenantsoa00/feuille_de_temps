@@ -49,7 +49,16 @@
             to="/cases"
             class="nav-btn"
             :disable="!canAccessCases"
-          />
+          >
+            <q-badge
+              v-if="auth.isAdmin && pendingMissionsCount > 0"
+              color="warning"
+              floating
+              text-color="black"
+            >
+              {{ pendingMissionsCount }}
+            </q-badge>
+          </q-btn>
           <q-btn flat dense no-caps label="Feuille de temps" to="/work-hours" class="nav-btn" />
           <q-btn
             flat
@@ -100,6 +109,7 @@ import { socket } from 'src/boot/socket'
 const auth = useAuthStore()
 const router = useRouter()
 const notifCount = ref(0)
+const pendingMissionsCount = ref(0)
 let timer
 
 /** Identité + rôle + email (utile pour les tests) */
@@ -132,6 +142,19 @@ const refreshNotif = async () => {
   }
 }
 
+const refreshPendingMissions = async () => {
+  if (!auth.token || !auth.isAdmin) {
+    pendingMissionsCount.value = 0
+    return
+  }
+  try {
+    const res = await api.get('/cases/pending-validation')
+    pendingMissionsCount.value = Array.isArray(res.data) ? res.data.length : 0
+  } catch {
+    pendingMissionsCount.value = 0
+  }
+}
+
 const logout = () => {
   auth.logout()
   router.push('/login')
@@ -139,11 +162,13 @@ const logout = () => {
 
 onMounted(() => {
   refreshNotif()
+  refreshPendingMissions()
   timer = setInterval(refreshNotif, 45000)
 
   // 🔥 ÉCOUTER LES UPDATES SOCKET
   socket.on('notificationCount', (count) => {
     notifCount.value = count
+    refreshPendingMissions()
   })
 })
 

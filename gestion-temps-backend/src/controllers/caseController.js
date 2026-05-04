@@ -1,8 +1,10 @@
 const caseModel = require("../models/caseModel");
 const notificationModel = require("../models/notificationModel");
+const pool = require("../config/db");
 const CASE_STATUS = {
   PENDING: 0,
   VALIDATED: 1,
+  FINISHED: 2,
 };
 const normalizeRole = (role) => {
   if (role === "chef" || role === "chef_mission") return "chef_de_mission";
@@ -31,6 +33,23 @@ const createCase = async (req, res) => {
           : CASE_STATUS.VALIDATED,
     };
     const row = await caseModel.createCase(payload);
+
+    if (normalizeRole(req.user.role) === "secretaire") {
+      const adminUsers = await pool.query(
+        `SELECT id FROM users WHERE role = 'admin'`
+      );
+      const io = req.app.get("io");
+      for (const admin of adminUsers.rows) {
+        const notif = await notificationModel.create({
+          user_id: admin.id,
+          content: `Mission en attente de validation: ${row.name}`,
+        });
+        io.to(`user_${admin.id}`).emit("newNotification", notif);
+        const unread = await notificationModel.countUnread(admin.id);
+        io.to(`user_${admin.id}`).emit("notificationCount", unread);
+      }
+    }
+
     res.status(201).json(row);
   } catch (error) {
     console.error("CREATE CASE ERROR:", error);
@@ -51,11 +70,14 @@ const setAssignments = async (req, res) => {
 
     if (
       role !== "admin" &&
-      role !== "expert_comptable" &&
-      role !== "secretaire" &&
       !(role === "chef_de_mission" && mission.user_id === userId)
     ) {
       return res.status(403).json({ message: "Accès refusé" });
+    }
+    if (mission.status !== CASE_STATUS.VALIDATED) {
+      return res
+        .status(400)
+        .json({ message: "Assignation possible uniquement après validation" });
     }
 
     await caseModel.replaceAssignments(
@@ -123,6 +145,28 @@ const validateCase = async (req, res) => {
   }
 };
 
+const finishCase = async (req, res) => {
+  try {
+    const row = await caseModel.finishCase(Number(req.params.id), req.user.id);
+    if (!row) {
+      const existing = await caseModel.getCaseById(Number(req.params.id));
+      if (!existing) {
+        return res.status(404).json({ message: "Mission introuvable" });
+      }
+      if (Number(existing.status) === CASE_STATUS.FINISHED) {
+        return res.json({ message: "Mission déjà terminée", case: existing });
+      }
+      return res.status(400).json({
+        message: "Mission non validée, impossible de la terminer",
+      });
+    }
+    res.json({ message: "Mission marquée terminée", case: row });
+  } catch (error) {
+    console.error("FINISH CASE ERROR:", error);
+    res.status(500).json({ message: "Erreur fin de mission" });
+  }
+};
+
 module.exports = {
   getCases,
   createCase,
@@ -130,4 +174,5 @@ module.exports = {
   getAssignments,
   getPendingCases,
   validateCase,
+  finishCase,
 };

@@ -41,7 +41,7 @@ export const useAuthStore = defineStore("auth", {
         state.user?.role === "chef_mission" ? "chef_de_mission" : state.user?.role
       ),
     canCreateMission: (state) =>
-      ["admin", "expert_comptable", "secretaire"].includes(
+      ["admin", "secretaire"].includes(
         state.user?.role === "chef_mission" ? "chef_de_mission" : state.user?.role
       ),
     canAccessCases: (state) =>

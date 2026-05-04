@@ -21,33 +21,31 @@
       </q-card>
     </div>
 
-    <div
-      v-if="stats.role === 'admin' && (stats.deadlineAlerts || []).length"
-      class="column q-gutter-sm q-mb-md"
-    >
+    <div v-if="isAdminLike && missionDeadlines.length" class="column q-gutter-sm q-mb-md">
       <q-banner
-        v-for="row in stats.deadlineAlerts"
-        :key="`${row.mission_id}-${row.alert_level}`"
+        v-for="row in missionDeadlines"
+        :key="`${row.mission_id}-${row.level}`"
         rounded
         dense
-        :class="
-          row.alert_level === 'overdue'
-            ? 'bg-red-1 text-red-10'
-            : 'bg-amber-1 text-amber-10'
-        "
+        :class="row.bannerClass"
       >
         <template #avatar>
-          <q-icon
-            size="sm"
-            :name="row.alert_level === 'overdue' ? 'event_busy' : 'schedule'"
-            :color="row.alert_level === 'overdue' ? 'negative' : 'warning'"
-          />
+          <q-icon size="sm" :name="row.icon" :color="row.iconColor" />
         </template>
-        <div class="text-weight-medium">{{ row.mission_name }}</div>
+        <div class="row items-center justify-between no-wrap">
+          <div class="text-weight-medium">{{ row.mission_name }}</div>
+          <q-btn
+            v-if="stats.role === 'admin' && Number(row.status) === 1"
+            flat
+            dense
+            color="negative"
+            label="Marquer finie"
+            @click="finishMission(row.mission_id)"
+          />
+        </div>
         <div class="text-caption">
           Société : {{ row.company_name }} — Échéance : {{ formatDeadlineLabel(row.end_date) }}
-          <template v-if="row.alert_level === 'overdue'"> — date limite dépassée</template>
-          <template v-else> — échéance proche (7 jours)</template>
+          — {{ row.label }}
         </div>
       </q-banner>
     </div>
@@ -56,7 +54,7 @@
       <q-card-section>
         <div class="text-subtitle1 q-mb-md">
           {{
-            useAdminBarChart
+            useTraceBarChart
               ? "Activités récentes (projet, durée, auteur)"
               : isAdminLike
                 ? "Évolution des heures par mission"
@@ -66,7 +64,7 @@
         <p v-if="!hasAnyChart" class="text-grey-7 text-body2">
           Aucune donnée pour ce profil.
         </p>
-        <div v-else-if="useAdminBarChart" class="chart-wrap">
+        <div v-else-if="useTraceBarChart" class="chart-wrap">
           <Bar :data="adminBarChartData" :options="adminBarChartOptions" />
         </div>
         <div v-else class="chart-wrap">
@@ -82,7 +80,7 @@
           <q-item v-for="(trace, idx) in stats.taskTraces" :key="`trace-${idx}`" class="gt-list-item">
             <q-item-section>
               <q-item-label>
-                {{ trace.user_name }} — {{ trace.task_name }}
+                {{ trace.user_name }} / {{ trace.user_role }} / {{ trace.user_email }} — {{ trace.task_name }}
               </q-item-label>
               <q-item-label caption>
                 {{ trace.work_date }} | {{ trace.company_name }} | {{ trace.mission_name }}
@@ -142,7 +140,7 @@
     <q-card v-if="isAdminLike && stats.topMissions?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Top missions</div>
-        <q-markup-table flat bordered dense>
+        <q-markup-table flat bordered dense class="gt-table-aligned">
           <thead>
             <tr>
               <th>Mission</th>
@@ -166,7 +164,7 @@
     <q-card v-if="isAdminLike && stats.topCollaborateurs?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Top collaborateurs</div>
-        <q-markup-table flat bordered dense>
+        <q-markup-table flat bordered dense class="gt-table-aligned">
           <thead>
             <tr>
               <th>Nom</th>
@@ -256,7 +254,7 @@ const stats = ref({
   weeklyMissionSummaries: [],
   monthlyMissionSummaries: [],
   collaboratorStats: null,
-  deadlineAlerts: [],
+  missionDeadlines: [],
   printMode: { available: false, sections: [] },
 });
 
@@ -310,23 +308,53 @@ function colorForMission(name) {
   return PALETTE[h % PALETTE.length];
 }
 
-const adminBarTraces = computed(() =>
-  isAdminLike.value ? (stats.value.taskTraces || []).slice(0, 40) : []
-);
+const adminBarTraces = computed(() => (stats.value.taskTraces || []).slice(0, 40));
 
-const useAdminBarChart = computed(
-  () => isAdminLike.value && adminBarTraces.value.length > 0
-);
+const useTraceBarChart = computed(() => adminBarTraces.value.length > 0);
 
 const hasLineChartData = computed(() => {
-  if (useAdminBarChart.value) return false;
+  if (useTraceBarChart.value) return false;
   if (isAdminLike.value && (stats.value.missionSeries || []).length > 0) {
     return true;
   }
   return (stats.value.hoursSeries || []).length > 0;
 });
 
-const hasAnyChart = computed(() => useAdminBarChart.value || hasLineChartData.value);
+const hasAnyChart = computed(() => useTraceBarChart.value || hasLineChartData.value);
+
+const missionDeadlines = computed(() => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return (stats.value.missionDeadlines || []).map((row) => {
+    const end = new Date(String(row.end_date).includes("T") ? row.end_date : `${row.end_date}T12:00:00`);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const delta = Number.isNaN(end.getTime()) ? null : Math.floor((end.getTime() - today.getTime()) / dayMs);
+    const ended = Number(row.status) === 2 || (delta != null && delta < 0);
+    const urgent = delta != null && delta <= 3;
+    const warning = delta != null && delta <= 10;
+    const level = ended ? "ended" : urgent ? "urgent" : warning ? "warning" : "ok";
+    return {
+      ...row,
+      level,
+      label:
+        level === "ended"
+          ? "Mission terminée ou dépassée"
+          : delta == null
+            ? "Date de fin invalide"
+            : `Fin dans ${delta} jour${delta > 1 ? "s" : ""}`,
+      bannerClass:
+        level === "ended"
+          ? "bg-red-1 text-red-10"
+          : level === "urgent"
+            ? "bg-red-1 text-red-10"
+            : level === "warning"
+              ? "bg-amber-1 text-amber-10"
+              : "bg-green-1 text-green-10",
+      icon: level === "ok" ? "event_available" : level === "warning" ? "schedule" : "event_busy",
+      iconColor: level === "ok" ? "positive" : level === "warning" ? "warning" : "negative",
+    };
+  });
+});
 
 const adminBarChartData = computed(() => {
   const traces = adminBarTraces.value;
@@ -355,7 +383,7 @@ const adminBarChartOptions = computed(() => ({
         title: (items) => {
           const i = items[0]?.dataIndex;
           const t = adminBarTraces.value[i];
-          return t ? `Point ${i + 1} — ${formatChartAxisDate(t.work_date)}` : "";
+          return t ? `Point ${i + 1} — ${formatChartAxisDate(t.work_date)} OK` : "";
         },
         label: (ctx) => {
           const i = ctx.dataIndex;
@@ -365,7 +393,7 @@ const adminBarChartOptions = computed(() => ({
             `Projet (mission): ${t.mission_name}`,
             `Tâche: ${t.task_name}`,
             `Durée: ${decimalHoursToHHMM(t.duration_hours)}`,
-            `Traité par: ${t.user_name}`,
+            `Traité par: ${t.user_name} / ${t.user_role} / ${t.user_email}`,
             `Société: ${t.company_name}`,
           ];
         },
@@ -375,7 +403,7 @@ const adminBarChartOptions = computed(() => ({
   scales: {
     x: {
       beginAtZero: true,
-      title: { display: true, text: "Durée (HH:MM sur l’axe via infobulle)" },
+      title: { display: true, text: "Durée" },
       ticks: {
         callback: (v) => decimalHoursToHHMM(v),
       },
@@ -460,6 +488,15 @@ const lineChartOptions = computed(() => {
             if (isMissionLine) {
               return [`Mission: ${ctx.dataset.label}`, `Durée ce jour: ${hhmm}`];
             }
+            const trace = (stats.value.taskTraces || [])[ctx.dataIndex];
+            if (trace) {
+              return [
+                `${trace.work_date} Durée : ${hhmm}`,
+                `Mission : ${trace.mission_name}`,
+                `Tâche : ${trace.task_name}`,
+                `Chef de projet : ${trace.chef_name}`,
+              ];
+            }
             return [`Durée: ${hhmm}`];
           },
           footer: () =>
@@ -490,6 +527,15 @@ const loadDashboard = async () => {
   }
 };
 
+const finishMission = async (missionId) => {
+  try {
+    await api.put(`/cases/${missionId}/finish`);
+    await loadDashboard();
+  } catch (error) {
+    console.error("Finish mission error:", error);
+  }
+};
+
 onMounted(() => {
   loadDashboard();
 });
@@ -502,6 +548,12 @@ onMounted(() => {
 
 .chart-wrap {
   height: 360px;
+}
+
+.gt-table-aligned :deep(th),
+.gt-table-aligned :deep(td) {
+  text-align: left;
+  vertical-align: middle;
 }
 
 </style>

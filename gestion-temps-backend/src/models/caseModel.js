@@ -2,6 +2,7 @@ const pool = require("../config/db");
 const CASE_STATUS = {
   PENDING: 0,
   VALIDATED: 1,
+  FINISHED: 2,
 };
 const normalizeRole = (role) => {
   if (role === "chef" || role === "chef_mission") return "chef_de_mission";
@@ -13,7 +14,22 @@ const caseSelect = `
     SELECT c.*,
            companies.name AS company_name,
            u.name AS chef_name,
-           u.first_name AS chef_first_name
+           u.first_name AS chef_first_name,
+           COALESCE((
+             SELECT json_agg(
+               json_build_object(
+                 'id', assignee.id,
+                 'name', assignee.name,
+                 'first_name', assignee.first_name,
+                 'email', assignee.email,
+                 'role', assignee.role
+               )
+               ORDER BY assignee.first_name NULLS LAST, assignee.name NULLS LAST, assignee.email
+             )
+             FROM case_assignments ca
+             JOIN users assignee ON assignee.id = ca.user_id
+             WHERE ca.case_id = c.id
+           ), '[]'::json) AS assigned_collaborators
     FROM cases c
     LEFT JOIN companies ON c.company_id = companies.id
     LEFT JOIN users u ON c.user_id = u.id
@@ -128,6 +144,7 @@ const userCanAccessCase = async (caseId, userId, role) => {
   const normalizedRole = normalizeRole(role);
   const c = await getCaseById(caseId);
   if (!c) return false;
+  if (Number(c.status) === CASE_STATUS.FINISHED) return false;
   const mustBeValidated =
     normalizedRole === "chef_de_mission" || normalizedRole === "collaborateur";
   if (mustBeValidated && c.status !== CASE_STATUS.VALIDATED) {
@@ -180,6 +197,20 @@ const validateCase = async (id, adminId) => {
   return result.rows[0] || null;
 };
 
+const finishCase = async (id, adminId) => {
+  const result = await pool.query(
+    `UPDATE cases
+     SET status = $2,
+         validated_by = COALESCE(validated_by, $3),
+         validated_at = COALESCE(validated_at, NOW())
+     WHERE id = $1
+       AND status = $4
+     RETURNING *`,
+    [id, CASE_STATUS.FINISHED, adminId, CASE_STATUS.VALIDATED]
+  );
+  return result.rows[0] || null;
+};
+
 module.exports = {
   getAllCases,
   getCasesForRole,
@@ -190,4 +221,6 @@ module.exports = {
   userCanAccessCase,
   getPendingCases,
   validateCase,
+  finishCase,
+  CASE_STATUS,
 };

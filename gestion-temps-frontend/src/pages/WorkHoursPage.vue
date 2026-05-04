@@ -137,7 +137,9 @@ const loadTasks = async () => {
 
 const loadCases = async () => {
   const res = await api.get('/cases')
-  cases.value = res.data.map((c) => ({ ...c, caseLabel: caseLabel(c) }))
+  cases.value = (res.data || [])
+    .filter((c) => Number(c.status) !== 2)
+    .map((c) => ({ ...c, caseLabel: caseLabel(c) }))
 }
 
 // charger heures

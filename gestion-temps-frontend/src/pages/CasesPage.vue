@@ -58,6 +58,13 @@
                   class="q-ml-xs"
                   label="En attente validation"
                 />
+                <q-badge
+                  v-else-if="Number(c.status) === 2"
+                  color="red"
+                  outline
+                  class="q-ml-xs"
+                  label="Terminée"
+                />
               </q-item-label>
               <q-item-label caption>
                 {{ c.description }} | {{ formatDate(c.start_date) }} → {{ formatDate(c.end_date) }}
@@ -66,19 +73,19 @@
             <q-item-section v-if="canAssignForCase(c)" side>
               <q-btn flat color="primary" label="Employés" @click="openAssign(c)" />
             </q-item-section>
-            <q-item-section
-              v-if="Number(c.status) === 0 && (auth.isAdmin || auth.isExpertComptable)"
-              side
-            >
+            <q-item-section v-if="Number(c.status) === 0 && auth.isAdmin" side>
               <q-btn color="primary" flat label="Valider" @click="validateCase(c.id)" />
+            </q-item-section>
+            <q-item-section v-if="Number(c.status) === 1 && auth.isAdmin" side>
+              <q-btn color="negative" flat label="Marquer finie" @click="finishCase(c.id)" />
             </q-item-section>
           </q-item>
         </q-list>
       </q-card-section>
     </q-card>
 
-    <div v-if="auth.isChef" class="row q-col-gutter-md q-mt-md">
-      <div v-for="c in chefMissions" :key="`chef-card-${c.id}`" class="col-12 col-sm-6 col-md-4">
+    <div v-if="auth.isChef || auth.isAdmin" class="row q-col-gutter-md q-mt-md">
+      <div v-for="c in missionCards" :key="`chef-card-${c.id}`" class="col-12 col-sm-6 col-md-4">
         <q-card class="gt-card">
           <q-card-section>
             <div class="text-subtitle1">{{ c.name }}</div>
@@ -87,15 +94,19 @@
             <div class="text-caption q-mt-sm">
               {{ formatDate(c.start_date) }} → {{ formatDate(c.end_date) }}
             </div>
+            <div class="text-caption q-mt-sm">
+              Collaborateurs :
+              {{ assignedCollaboratorsDisplay(c) }}
+            </div>
           </q-card-section>
-          <q-card-actions align="right">
+          <q-card-actions align="right" v-if="canAssignForCase(c)">
             <q-btn flat color="primary" label="Gérer employés" @click="openAssign(c)" />
           </q-card-actions>
         </q-card>
       </div>
     </div>
 
-    <q-card v-if="auth.isAdmin || auth.isExpertComptable" class="gt-card gt-enter-up gt-delay-1 q-mt-md">
+    <q-card v-if="auth.isAdmin" class="gt-card gt-enter-up gt-delay-1 q-mt-md">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Missions à valider</div>
         <q-list bordered separator>
@@ -177,6 +188,7 @@ const employees = computed(() =>
 const chefMissions = computed(() =>
   cases.value.filter((c) => c.user_id === auth.user?.id)
 )
+const missionCards = computed(() => (auth.isAdmin ? cases.value : chefMissions.value))
 
 const userLabel = (u) => {
   const fullName = [u.first_name, u.name].filter(Boolean).join(' ').trim()
@@ -196,10 +208,17 @@ const formatDate = (value) => {
 }
 
 const canAssignForCase = (c) => {
-  if (Number(c.status) === 0 && !(auth.isAdmin || auth.isExpertComptable)) return false
-  if (auth.isAdmin || auth.isSecretaire) return true
+  if (Number(c.status) !== 1) return false
+  if (auth.isAdmin) return true
   if (['chef', 'chef_mission', 'chef_de_mission'].includes(auth.role) && c.user_id === auth.user?.id) return true
   return false
+}
+const assignedCollaboratorsDisplay = (c) => {
+  const assigned = Array.isArray(c.assigned_collaborators) ? c.assigned_collaborators : []
+  if (!assigned.length) return 'Aucun'
+  return assigned
+    .map((u) => [u.first_name, u.name].filter(Boolean).join(' ').trim() || u.email)
+    .join(', ')
 }
 
 const loadData = async () => {
@@ -213,7 +232,7 @@ const loadData = async () => {
     cases.value = c.data
     companies.value = comp.data
     users.value = u.data
-    if (auth.isAdmin || auth.isExpertComptable) {
+    if (auth.isAdmin) {
       const pending = await api.get('/cases/pending-validation')
       pendingCases.value = pending.data
     } else {
@@ -237,6 +256,19 @@ const validateCase = async (id) => {
     Notify.create({
       type: 'negative',
       message: e.response?.data?.message ?? 'Erreur de validation',
+    })
+  }
+}
+
+const finishCase = async (id) => {
+  try {
+    await api.put(`/cases/${id}/finish`)
+    Notify.create({ type: 'positive', message: 'Mission terminée' })
+    await loadData()
+  } catch (e) {
+    Notify.create({
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur fin de mission',
     })
   }
 }
