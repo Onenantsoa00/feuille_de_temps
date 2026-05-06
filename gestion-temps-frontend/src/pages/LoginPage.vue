@@ -6,11 +6,7 @@
         <div class="text-caption text-grey-7">
           Accédez à votre espace de suivi.
         </div>
-        <div class="text-caption text-grey-6 q-mt-sm">
-          Compte administrateur par défaut (après migration SQL + 1er démarrage du serveur) :
-          <strong>admin@admin.local</strong> — mot de passe
-          <strong>Admin123!</strong> ou variable <code>DEFAULT_ADMIN_PASSWORD</code>.
-        </div>
+        
       </q-card-section>
 
       <q-card-section>
