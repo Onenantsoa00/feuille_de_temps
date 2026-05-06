@@ -6,11 +6,14 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log("EMAIL:", email);
+
     // Vérifier utilisateur
-    const result = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
-      [email]
-    );
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
+
+    console.log("RESULT:", result.rows);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Utilisateur introuvable" });
@@ -25,7 +28,10 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Mot de passe incorrect" });
     }
 
-    if (["employe", "collaborateur"].includes(user.role) && user.is_validated === false) {
+    if (
+      ["employe", "collaborateur"].includes(user.role) &&
+      user.is_validated === false
+    ) {
       return res.status(403).json({
         message: "Votre compte collaborateur doit être validé",
       });
@@ -38,7 +44,7 @@ const login = async (req, res) => {
         role: user.role,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "1d" },
     );
 
     res.json({
@@ -53,8 +59,8 @@ const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Erreur login" });
+    console.error("LOGIN ERROR DETAIL:", error);
+    res.status(500).json({ message: error.message });
   }
 };
 
