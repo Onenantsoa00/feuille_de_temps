@@ -110,15 +110,20 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
        COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.name)), ''), u.email) AS user_name,
        u.email AS user_email,
        u.role AS user_role,
+       COALESCE(c.id, 0) AS mission_id,
+       COALESCE(c.name, '(sans mission)') AS mission_name,
+       COALESCE(comp.name, '—') AS company_name,
        COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours,
        COUNT(*)::int AS entries_count
      FROM work_hours wh
      JOIN users u ON u.id = wh.user_id
+     LEFT JOIN tasks t ON t.id = wh.task_id
+     LEFT JOIN cases c ON c.id = t.case_id
+     LEFT JOIN companies comp ON comp.id = c.company_id
      WHERE wh.work_date >= $1::date
        AND wh.work_date < ($1::date + INTERVAL '1 month')
-       AND u.role IN ('collaborateur', 'employe')
-     GROUP BY DATE_TRUNC('week', wh.work_date), u.id, u.first_name, u.name, u.email, u.role
-     ORDER BY period_start ASC, total_hours DESC`,
+     GROUP BY DATE_TRUNC('week', wh.work_date), u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, comp.name
+     ORDER BY period_start ASC, user_name ASC, mission_name ASC`,
     params
   );
 
@@ -129,15 +134,20 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
        COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.name)), ''), u.email) AS user_name,
        u.email AS user_email,
        u.role AS user_role,
+       COALESCE(c.id, 0) AS mission_id,
+       COALESCE(c.name, '(sans mission)') AS mission_name,
+       COALESCE(comp.name, '—') AS company_name,
        COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours,
        COUNT(*)::int AS entries_count
      FROM work_hours wh
      JOIN users u ON u.id = wh.user_id
+     LEFT JOIN tasks t ON t.id = wh.task_id
+     LEFT JOIN cases c ON c.id = t.case_id
+     LEFT JOIN companies comp ON comp.id = c.company_id
      WHERE wh.work_date >= $1::date
        AND wh.work_date < ($1::date + INTERVAL '1 month')
-       AND u.role IN ('collaborateur', 'employe')
-     GROUP BY u.id, u.first_name, u.name, u.email, u.role
-     ORDER BY total_hours DESC`,
+     GROUP BY u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, comp.name
+     ORDER BY user_name ASC, mission_name ASC`,
     params
   );
 

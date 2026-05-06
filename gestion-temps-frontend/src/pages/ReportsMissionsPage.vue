@@ -22,7 +22,7 @@
     <q-card class="q-mb-md gt-card">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Synthèse par semaine (dans le mois choisi)</div>
-        <q-markup-table flat bordered wrap-cells>
+        <q-markup-table flat bordered wrap-cells class="report-table">
           <thead>
             <tr>
               <th>Semaine (début)</th>
@@ -51,7 +51,7 @@
     <q-card class="gt-card">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Synthèse pour le mois (par mission)</div>
-        <q-markup-table flat bordered wrap-cells>
+        <q-markup-table flat bordered wrap-cells class="report-table">
           <thead>
             <tr>
               <th>Mission</th>
@@ -111,6 +111,11 @@ onMounted(load);
 <style scoped>
 .print-only {
   display: none;
+}
+.report-table :deep(th),
+.report-table :deep(td) {
+  text-align: left;
+  vertical-align: middle;
 }
 @media print {
   .no-print {

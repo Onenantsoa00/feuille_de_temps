@@ -13,6 +13,34 @@
           style="min-width: 180px"
           @update:model-value="load"
         />
+        <q-select
+          v-model="selectedUserId"
+          :options="collaboratorOptions"
+          emit-value
+          map-options
+          option-label="label"
+          option-value="value"
+          label="Filtre utilisateur"
+          dense
+          outlined
+          clearable
+          class="col-auto"
+          style="min-width: 220px"
+        />
+        <q-select
+          v-model="selectedMissionId"
+          :options="missionOptions"
+          emit-value
+          map-options
+          option-label="label"
+          option-value="value"
+          label="Filtre mission"
+          dense
+          outlined
+          clearable
+          class="col-auto"
+          style="min-width: 220px"
+        />
         <q-btn color="primary" outline icon="print" label="Imprimer" @click="print" />
       </div>
     </div>
@@ -22,28 +50,32 @@
     <q-card class="q-mb-md gt-card">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Par semaine (dans le mois choisi)</div>
-        <q-markup-table flat bordered wrap-cells>
+        <q-markup-table flat bordered wrap-cells class="report-table">
           <thead>
             <tr>
               <th>Semaine (début)</th>
               <th>Collaborateur</th>
               <th>Email</th>
               <th>Rôle</th>
+              <th>Mission</th>
+              <th>Société</th>
               <th>Entrées</th>
               <th>Total heures</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in weeklyRows" :key="`w-${i}`">
+            <tr v-for="(row, i) in filteredWeeklyRows" :key="`w-${i}`">
               <td>{{ row.period_start }}</td>
               <td>{{ row.user_name }}</td>
               <td>{{ row.user_email }}</td>
               <td>{{ row.user_role }}</td>
+              <td>{{ row.mission_name }}</td>
+              <td>{{ row.company_name }}</td>
               <td>{{ row.entries_count }}</td>
               <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
             </tr>
-            <tr v-if="!weeklyRows.length">
-              <td colspan="6" class="text-grey-7">Aucune donnée pour ce mois.</td>
+            <tr v-if="!filteredWeeklyRows.length">
+              <td colspan="8" class="text-grey-7">Aucune donnée pour ce filtre.</td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -53,26 +85,30 @@
     <q-card class="gt-card">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Pour le mois entier (par collaborateur)</div>
-        <q-markup-table flat bordered wrap-cells>
+        <q-markup-table flat bordered wrap-cells class="report-table">
           <thead>
             <tr>
               <th>Collaborateur</th>
               <th>Email</th>
               <th>Rôle</th>
+              <th>Mission</th>
+              <th>Société</th>
               <th>Entrées</th>
               <th>Total heures</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in monthlyRows" :key="`m-${i}`">
+            <tr v-for="(row, i) in filteredMonthlyRows" :key="`m-${i}`">
               <td>{{ row.user_name }}</td>
               <td>{{ row.user_email }}</td>
               <td>{{ row.user_role }}</td>
+              <td>{{ row.mission_name }}</td>
+              <td>{{ row.company_name }}</td>
               <td>{{ row.entries_count }}</td>
               <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
             </tr>
-            <tr v-if="!monthlyRows.length">
-              <td colspan="5" class="text-grey-7">Aucune donnée pour ce mois.</td>
+            <tr v-if="!filteredMonthlyRows.length">
+              <td colspan="7" class="text-grey-7">Aucune donnée pour ce filtre.</td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -89,6 +125,8 @@ import { decimalHoursToHHMM } from "src/utils/formatDuration";
 const month = ref(defaultMonth());
 const weeklyRows = ref([]);
 const monthlyRows = ref([]);
+const selectedUserId = ref(null);
+const selectedMissionId = ref(null);
 
 function defaultMonth() {
   const d = new Date();
@@ -96,6 +134,49 @@ function defaultMonth() {
 }
 
 const monthLabel = computed(() => month.value || "");
+const collaboratorOptions = computed(() => {
+  const map = new Map();
+  for (const row of monthlyRows.value) {
+    const key = Number(row.user_id);
+    if (!map.has(key)) {
+      map.set(key, {
+        label: `${row.user_name} (${row.user_email})`,
+        value: key,
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "fr"));
+});
+
+const missionOptions = computed(() => {
+  const map = new Map();
+  for (const row of monthlyRows.value) {
+    const key = Number(row.mission_id || 0);
+    if (!map.has(key)) {
+      map.set(key, {
+        label: `${row.mission_name} — ${row.company_name}`,
+        value: key,
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "fr"));
+});
+
+const filteredWeeklyRows = computed(() =>
+  weeklyRows.value.filter((row) => {
+    if (selectedUserId.value != null && Number(row.user_id) !== Number(selectedUserId.value)) return false;
+    if (selectedMissionId.value != null && Number(row.mission_id || 0) !== Number(selectedMissionId.value)) return false;
+    return true;
+  })
+);
+
+const filteredMonthlyRows = computed(() =>
+  monthlyRows.value.filter((row) => {
+    if (selectedUserId.value != null && Number(row.user_id) !== Number(selectedUserId.value)) return false;
+    if (selectedMissionId.value != null && Number(row.mission_id || 0) !== Number(selectedMissionId.value)) return false;
+    return true;
+  })
+);
 
 async function load() {
   const res = await api.get("/dashboard/reports/collaborateurs", {
@@ -115,6 +196,11 @@ onMounted(load);
 <style scoped>
 .print-only {
   display: none;
+}
+.report-table :deep(th),
+.report-table :deep(td) {
+  text-align: left;
+  vertical-align: middle;
 }
 @media print {
   .no-print {

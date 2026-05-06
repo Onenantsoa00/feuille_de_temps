@@ -7,7 +7,55 @@ const app = require("./src/app");
 const { seedAdmin } = require("./src/utils/seedAdmin");
 const notificationModel = require("./src/models/notificationModel");
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+const toIsoDate = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const getPreviousBusinessDay = (referenceDate = new Date()) => {
+  const d = new Date(referenceDate);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - 1);
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() - 1);
+  }
+  return d;
+};
+
+const isMorningRunWindow = (d = new Date()) => d.getHours() >= 6 && d.getHours() < 12;
+
+async function runMissingTimesheetReminder(io) {
+  const now = new Date();
+  if (!isMorningRunWindow(now)) return;
+  const targetDate = getPreviousBusinessDay(now);
+  const workDate = toIsoDate(targetDate);
+  const inserted = await notificationModel.notifyMissingTimesheetForDate({ workDate });
+  for (const row of inserted) {
+    io.to(`user_${row.user_id}`).emit("newNotification", row);
+    const count = await notificationModel.countUnread(row.user_id);
+    io.to(`user_${row.user_id}`).emit("notificationCount", count);
+  }
+}
+
+function scheduleDailyReminder(io) {
+  let lastRunDate = null;
+  const tick = async () => {
+    const today = toIsoDate(new Date());
+    if (lastRunDate === today) return;
+    try {
+      await runMissingTimesheetReminder(io);
+      lastRunDate = today;
+    } catch (error) {
+      console.error("Missing timesheet reminder error:", error.message);
+    }
+  };
+  tick();
+  setInterval(tick, 60 * 60 * 1000);
+}
 
 async function start() {
   try {
@@ -67,6 +115,8 @@ async function start() {
   });
 
   server.listen(PORT, "0.0.0.0", () => {
+    scheduleDailyReminder(io);
+    console.log("Server running");
     console.log(`Serveur lancé sur http://0.0.0.0:${PORT}`);
   });
 }

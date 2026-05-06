@@ -266,4 +266,13 @@ onUnmounted(() => {
     display: none;
   }
 }
+
+@media print {
+  .glass-header {
+    display: none !important;
+  }
+  .gt-page-shell {
+    padding-top: 0 !important;
+  }
+}
 </style>
