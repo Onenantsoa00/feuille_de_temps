@@ -2,8 +2,17 @@
   <q-layout view="lHh Lpr lFf">
     <q-header elevated class="glass-header">
       <q-toolbar class="q-px-md gt-toolbar text-white">
+        <q-btn
+          v-if="isMobile"
+          flat
+          dense
+          round
+          icon="menu"
+          class="q-mr-sm nav-btn"
+          @click="leftDrawerOpen = !leftDrawerOpen"
+        />
         <q-toolbar-title class="text-weight-bold gt-brand">Gestion Temps</q-toolbar-title>
-        <div class="gt-toolbar-nav row items-center no-wrap q-gutter-xs">
+        <div v-if="!isMobile" class="gt-toolbar-nav row items-center no-wrap q-gutter-xs">
           <q-btn flat dense no-caps label="Accueil" to="/dashboard" class="nav-btn" />
           <q-btn
             v-if="auth.isAdmin || auth.isExpertComptable"
@@ -75,7 +84,7 @@
         </div>
         <q-space />
         <span
-          v-if="auth.user"
+          v-if="auth.user && !isMobile"
           class="text-caption q-mr-sm gt-user-pill"
           :title="userPillTitle"
         >
@@ -93,6 +102,101 @@
       </q-toolbar>
     </q-header>
 
+    <q-drawer
+      v-model="leftDrawerOpen"
+      side="left"
+      bordered
+      overlay
+      class="gt-mobile-drawer"
+    >
+      <q-list class="q-pa-sm">
+        <q-item-label header class="text-grey-8">Navigation</q-item-label>
+
+        <q-item clickable v-ripple to="/dashboard" @click="leftDrawerOpen = false">
+          <q-item-section avatar><q-icon name="home" /></q-item-section>
+          <q-item-section>Accueil</q-item-section>
+        </q-item>
+
+        <q-item
+          v-if="auth.isAdmin || auth.isExpertComptable"
+          clickable
+          v-ripple
+          to="/reports/missions"
+          @click="leftDrawerOpen = false"
+        >
+          <q-item-section avatar><q-icon name="analytics" /></q-item-section>
+          <q-item-section>Rapport missions</q-item-section>
+        </q-item>
+
+        <q-item
+          v-if="auth.isAdmin || auth.isExpertComptable"
+          clickable
+          v-ripple
+          to="/reports/collaborateurs"
+          @click="leftDrawerOpen = false"
+        >
+          <q-item-section avatar><q-icon name="insights" /></q-item-section>
+          <q-item-section>Rapport collaborateurs</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/companies" :disable="!canAccessCompanies" @click="leftDrawerOpen = false">
+          <q-item-section avatar><q-icon name="business" /></q-item-section>
+          <q-item-section>Sociétés</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/users" :disable="!canAccessUsers" @click="leftDrawerOpen = false">
+          <q-item-section avatar><q-icon name="group" /></q-item-section>
+          <q-item-section>Comptes</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/cases" :disable="!canAccessCases" @click="leftDrawerOpen = false">
+          <q-item-section avatar><q-icon name="work_outline" /></q-item-section>
+          <q-item-section class="row items-center no-wrap">
+            <span>Missions</span>
+            <q-badge
+              v-if="auth.isAdmin && pendingMissionsCount > 0"
+              color="warning"
+              text-color="black"
+              class="q-ml-sm"
+            >
+              {{ pendingMissionsCount }}
+            </q-badge>
+          </q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/work-hours" @click="leftDrawerOpen = false">
+          <q-item-section avatar><q-icon name="schedule" /></q-item-section>
+          <q-item-section>Feuille de temps</q-item-section>
+        </q-item>
+
+        <q-separator class="q-my-sm" />
+
+        <q-item clickable v-ripple to="/notifications" @click="leftDrawerOpen = false">
+          <q-item-section avatar><q-icon name="notifications_none" /></q-item-section>
+          <q-item-section class="row items-center no-wrap">
+            <span>Notifications</span>
+            <q-badge v-if="notifCount > 0" color="negative" class="q-ml-sm">{{ notifCount }}</q-badge>
+          </q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/messages" @click="leftDrawerOpen = false">
+          <q-item-section avatar><q-icon name="mail_outline" /></q-item-section>
+          <q-item-section>Messages</q-item-section>
+        </q-item>
+
+        <q-item v-if="auth.token" clickable v-ripple @click="logoutAndClose">
+          <q-item-section avatar><q-icon name="logout" /></q-item-section>
+          <q-item-section>Déconnexion</q-item-section>
+        </q-item>
+
+        <q-item v-if="auth.user" class="q-mt-sm">
+          <q-item-section>
+            <div class="text-caption gt-user-pill-mobile" :title="userPillTitle">{{ userPill }}</div>
+          </q-item-section>
+        </q-item>
+      </q-list>
+    </q-drawer>
+
     <q-page-container class="app-surface gt-page-shell">
       <router-view />
     </q-page-container>
@@ -101,15 +205,18 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useQuasar } from 'quasar'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from 'src/stores/auth'
 import { api } from 'src/boot/axios'
 import { socket } from 'src/boot/socket'
 
+const $q = useQuasar()
 const auth = useAuthStore()
 const router = useRouter()
 const notifCount = ref(0)
 const pendingMissionsCount = ref(0)
+const leftDrawerOpen = ref(false)
 let timer
 
 /** Identité + rôle + email (utile pour les tests) */
@@ -128,6 +235,7 @@ const userPillTitle = computed(() => userPill.value)
 const canAccessCompanies = computed(() => auth.canManageCompanies)
 const canAccessUsers = computed(() => auth.canManageUsers)
 const canAccessCases = computed(() => auth.canAccessCases)
+const isMobile = computed(() => $q.screen.lt.md)
 
 const refreshNotif = async () => {
   if (!auth.token) {
@@ -158,6 +266,11 @@ const refreshPendingMissions = async () => {
 const logout = () => {
   auth.logout()
   router.push('/login')
+}
+
+const logoutAndClose = () => {
+  leftDrawerOpen.value = false
+  logout()
 }
 
 onMounted(() => {
@@ -261,9 +374,22 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.gt-mobile-drawer {
+  width: min(88vw, 320px);
+}
+
+.gt-user-pill-mobile {
+  opacity: 0.9;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 1023px) {
   .gt-toolbar-nav .q-btn :deep(.q-btn__content) span.block {
     display: none;
+  }
+
+  .gt-toolbar {
+    min-height: 52px;
   }
 }
 

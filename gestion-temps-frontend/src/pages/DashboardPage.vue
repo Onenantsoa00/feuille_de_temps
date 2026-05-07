@@ -1,8 +1,8 @@
 <template>
   <q-page class="q-pa-md">
-    <div class="row items-center justify-between q-mb-md">
-      <div class="text-h4 gt-page-title">Tableau de bord</div>
-      <div v-if="isAdminLike" class="row q-gutter-xs no-wrap">
+    <div class="row items-center justify-between q-mb-md q-col-gutter-sm dash-head">
+      <div class="text-h4 gt-page-title dash-title">Tableau de bord</div>
+      <div v-if="isAdminLike" class="row q-gutter-xs dash-actions">
         <q-btn flat dense color="primary" to="/reports/missions" label="Rapport missions" />
         <q-btn flat dense color="primary" to="/reports/collaborateurs" label="Rapport collaborateurs" />
       </div>
@@ -32,7 +32,7 @@
         <template #avatar>
           <q-icon size="sm" :name="row.icon" :color="row.iconColor" />
         </template>
-        <div class="row items-center justify-between no-wrap">
+        <div class="row items-center justify-between mission-banner-head">
           <div class="text-weight-medium">{{ row.mission_name }}</div>
           <q-btn
             v-if="stats.role === 'admin' && Number(row.status) === 1"
@@ -140,7 +140,7 @@
     <q-card v-if="isAdminLike && stats.topMissions?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Top missions</div>
-        <q-markup-table flat bordered dense class="gt-table-aligned">
+        <q-markup-table flat bordered dense class="gt-table-aligned gt-table-mobile">
           <thead>
             <tr>
               <th>Mission</th>
@@ -164,7 +164,7 @@
     <q-card v-if="isAdminLike && stats.topCollaborateurs?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Top collaborateurs</div>
-        <q-markup-table flat bordered dense class="gt-table-aligned">
+        <q-markup-table flat bordered dense class="gt-table-aligned gt-table-mobile">
           <thead>
             <tr>
               <th>Nom</th>
@@ -554,6 +554,46 @@ onMounted(() => {
 .gt-table-aligned :deep(td) {
   text-align: left;
   vertical-align: middle;
+}
+
+@media (max-width: 1023px) {
+  .dash-head {
+    align-items: flex-start;
+  }
+
+  .dash-title {
+    font-size: 1.6rem;
+  }
+
+  .dash-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .mission-banner-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chart-wrap {
+    height: 300px;
+  }
+}
+
+@media (max-width: 599px) {
+  .dash-title {
+    font-size: 1.35rem;
+  }
+
+  .chart-wrap {
+    height: 260px;
+  }
+
+  .gt-table-mobile {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 </style>

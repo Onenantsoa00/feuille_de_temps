@@ -39,7 +39,7 @@
 
         <q-input v-model="form.end_time" type="time" label="Heure fin" class="q-mt-md" />
 
-        <div class="row q-gutter-sm q-mt-md">
+        <div class="row q-gutter-sm q-mt-md timer-actions">
           <q-btn
             label="Démarrer minuteur"
             color="secondary"
@@ -71,7 +71,7 @@
         <div class="text-subtitle1">Historique</div>
 
         <q-list separator>
-          <q-item v-for="item in workHours" :key="item.work_hour_id" class="gt-list-item">
+          <q-item v-for="item in workHours" :key="item.work_hour_id" class="gt-list-item work-hour-item">
             <q-item-section>
               {{ lineLabel(item) }}
             </q-item-section>
@@ -371,5 +371,25 @@ onMounted(() => {
 .delete-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+
+@media (max-width: 599px) {
+  .timer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .timer-actions .q-btn {
+    width: 100%;
+  }
+
+  .work-hour-item {
+    align-items: flex-start;
+  }
+
+  .work-hour-item .q-item__section--side {
+    margin-top: 8px;
+    align-items: flex-start;
+  }
 }
 </style>

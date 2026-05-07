@@ -59,7 +59,7 @@ const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("LOGIN ERROR DETAIL:", error);
+    console.error("FULL ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };
