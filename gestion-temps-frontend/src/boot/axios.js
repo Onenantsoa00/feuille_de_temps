@@ -1,10 +1,10 @@
 import { boot } from 'quasar/wrappers'
 import axios from 'axios'
 
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+
 const api = axios.create({
-  //baseURL: "http://192.168.16.110:3000/api",
-  //baseURL: 'http://localhost:3000/api',
-  baseURL: 'https://feuille-de-temps.onrender.com/api'
+  baseURL: apiBaseUrl
 })
 
 api.interceptors.request.use((config) => {
