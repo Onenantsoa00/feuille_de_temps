@@ -18,6 +18,22 @@ const caseSelect = `
            COALESCE((
              SELECT json_agg(
                json_build_object(
+                 'id', manager.id,
+                 'name', manager.name,
+                 'first_name', manager.first_name,
+                 'email', manager.email,
+                 'role', manager.role
+               )
+               ORDER BY manager.first_name NULLS LAST, manager.name NULLS LAST, manager.email
+             )
+             FROM case_assignments ca
+             JOIN users manager ON manager.id = ca.user_id
+             WHERE ca.case_id = c.id
+               AND manager.role IN ('chef', 'chef_mission', 'chef_de_mission')
+           ), '[]'::json) AS assigned_chefs,
+           COALESCE((
+             SELECT json_agg(
+               json_build_object(
                  'id', assignee.id,
                  'name', assignee.name,
                  'first_name', assignee.first_name,
@@ -29,6 +45,7 @@ const caseSelect = `
              FROM case_assignments ca
              JOIN users assignee ON assignee.id = ca.user_id
              WHERE ca.case_id = c.id
+               AND assignee.role IN ('employe', 'collaborateur')
            ), '[]'::json) AS assigned_collaborators
     FROM cases c
     LEFT JOIN companies ON c.company_id = companies.id
@@ -78,30 +95,114 @@ const createCase = async (payload) => {
     description = null,
     company_id,
     chef_id,
+    chef_ids = [],
     start_date = null,
     end_date = null,
     created_by = null,
     status = CASE_STATUS.VALIDATED,
   } = payload;
 
-  const result = await pool.query(
-    `INSERT INTO cases
-    (name, description, company_id, user_id, start_date, end_date, created_by, status)
-   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-   RETURNING *`,
-    [
-      name,
-      description,
-      company_id,
-      chef_id,
-      start_date,
-      end_date,
-      created_by,
-      status,
-    ],
-  );
+  const primaryChefId = Number(chef_id ?? chef_ids?.[0] ?? null);
+  const managerIds = [...new Set((Array.isArray(chef_ids) ? chef_ids : [chef_id]).filter(Boolean).map(Number))];
 
-  return result.rows[0];
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `INSERT INTO cases
+      (name, description, company_id, user_id, start_date, end_date, created_by, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING *`,
+      [
+        name,
+        description,
+        company_id,
+        primaryChefId,
+        start_date,
+        end_date,
+        created_by,
+        status,
+      ],
+    );
+    const createdCase = result.rows[0];
+    const secondaryManagers = managerIds.filter((id) => id !== primaryChefId);
+    for (const managerId of secondaryManagers) {
+      await client.query(
+        `INSERT INTO case_assignments (case_id, user_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [createdCase.id, managerId],
+      );
+    }
+    await client.query("COMMIT");
+    return createdCase;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+const updateCase = async (id, payload) => {
+  const {
+    name,
+    description = null,
+    company_id,
+    chef_id,
+    chef_ids = [],
+    start_date = null,
+    end_date = null,
+  } = payload;
+  const primaryChefId = Number(chef_id ?? chef_ids?.[0] ?? null);
+  const managerIds = [...new Set((Array.isArray(chef_ids) ? chef_ids : [chef_id]).filter(Boolean).map(Number))];
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `UPDATE cases
+       SET name = $2,
+           description = $3,
+           company_id = $4,
+           user_id = $5,
+           start_date = $6,
+           end_date = $7
+       WHERE id = $1
+       RETURNING *`,
+      [id, name, description, company_id, primaryChefId, start_date, end_date],
+    );
+    const updated = result.rows[0] || null;
+    if (!updated) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+
+    await client.query(
+      `DELETE FROM case_assignments ca
+       USING users u
+       WHERE ca.case_id = $1
+         AND ca.user_id = u.id
+         AND u.role IN ('chef', 'chef_mission', 'chef_de_mission')`,
+      [id],
+    );
+
+    const secondaryManagers = managerIds.filter((managerId) => managerId !== primaryChefId);
+    for (const managerId of secondaryManagers) {
+      await client.query(
+        `INSERT INTO case_assignments (case_id, user_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [id, managerId],
+      );
+    }
+
+    await client.query("COMMIT");
+    return updated;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 const getCaseById = async (id) => {
@@ -215,6 +316,7 @@ module.exports = {
   getAllCases,
   getCasesForRole,
   createCase,
+  updateCase,
   getCaseById,
   replaceAssignments,
   getAssignmentUserIds,

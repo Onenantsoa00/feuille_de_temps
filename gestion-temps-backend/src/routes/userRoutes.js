@@ -6,6 +6,9 @@ const {
   getUsers,
   getPendingEmployees,
   validateEmployee,
+  changePassword,
+  updateUser,
+  getUserMissions,
 } = require("../controllers/userController");
 const { login } = require("../controllers/authController");
 const verifyToken = require("../middlewares/authMiddleware");
@@ -35,6 +38,19 @@ router.put(
   verifyToken,
   requireRole("admin", "expert_comptable"),
   validateEmployee
+);
+router.put("/users/change-password", verifyToken, changePassword);
+router.get(
+  "/users/:id/missions",
+  verifyToken,
+  requireRole("admin", "expert_comptable"),
+  getUserMissions
+);
+router.put(
+  "/users/:id",
+  verifyToken,
+  requireRole("admin", "expert_comptable"),
+  updateUser
 );
 
 router.get("/profile", verifyToken, (req, res) => {

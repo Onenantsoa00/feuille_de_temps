@@ -12,6 +12,12 @@
           @click="leftDrawerOpen = !leftDrawerOpen"
         />
         <q-toolbar-title class="text-weight-bold gt-brand">Gestion Temps</q-toolbar-title>
+        <q-img
+          src="/logo_etika_sans_background.png"
+          fit="contain"
+          style="width: 92px; height: 34px"
+          class="q-mr-sm"
+        />
         <div v-if="!isMobile" class="gt-toolbar-nav row items-center no-wrap q-gutter-xs">
           <q-btn flat dense no-caps label="Accueil" to="/dashboard" class="nav-btn" />
           <q-btn
@@ -81,6 +87,15 @@
             <q-badge v-if="notifCount > 0" color="negative" floating>{{ notifCount }}</q-badge>
           </q-btn>
           <q-btn flat dense no-caps round icon="mail_outline" to="/messages" class="nav-btn" />
+          <q-btn
+            v-if="auth.token"
+            flat
+            dense
+            no-caps
+            label="Mot de passe"
+            to="/change-password"
+            class="nav-btn"
+          />
         </div>
         <q-space />
         <span
@@ -102,13 +117,7 @@
       </q-toolbar>
     </q-header>
 
-    <q-drawer
-      v-model="leftDrawerOpen"
-      side="left"
-      bordered
-      overlay
-      class="gt-mobile-drawer"
-    >
+    <q-drawer v-model="leftDrawerOpen" side="left" bordered overlay class="gt-mobile-drawer">
       <q-list class="q-pa-sm">
         <q-item-label header class="text-grey-8">Navigation</q-item-label>
 
@@ -139,17 +148,35 @@
           <q-item-section>Rapport collaborateurs</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple to="/companies" :disable="!canAccessCompanies" @click="leftDrawerOpen = false">
+        <q-item
+          clickable
+          v-ripple
+          to="/companies"
+          :disable="!canAccessCompanies"
+          @click="leftDrawerOpen = false"
+        >
           <q-item-section avatar><q-icon name="business" /></q-item-section>
           <q-item-section>Sociétés</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple to="/users" :disable="!canAccessUsers" @click="leftDrawerOpen = false">
+        <q-item
+          clickable
+          v-ripple
+          to="/users"
+          :disable="!canAccessUsers"
+          @click="leftDrawerOpen = false"
+        >
           <q-item-section avatar><q-icon name="group" /></q-item-section>
           <q-item-section>Comptes</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple to="/cases" :disable="!canAccessCases" @click="leftDrawerOpen = false">
+        <q-item
+          clickable
+          v-ripple
+          to="/cases"
+          :disable="!canAccessCases"
+          @click="leftDrawerOpen = false"
+        >
           <q-item-section avatar><q-icon name="work_outline" /></q-item-section>
           <q-item-section class="row items-center no-wrap">
             <span>Missions</span>
@@ -175,13 +202,26 @@
           <q-item-section avatar><q-icon name="notifications_none" /></q-item-section>
           <q-item-section class="row items-center no-wrap">
             <span>Notifications</span>
-            <q-badge v-if="notifCount > 0" color="negative" class="q-ml-sm">{{ notifCount }}</q-badge>
+            <q-badge v-if="notifCount > 0" color="negative" class="q-ml-sm">{{
+              notifCount
+            }}</q-badge>
           </q-item-section>
         </q-item>
 
         <q-item clickable v-ripple to="/messages" @click="leftDrawerOpen = false">
           <q-item-section avatar><q-icon name="mail_outline" /></q-item-section>
           <q-item-section>Messages</q-item-section>
+        </q-item>
+
+        <q-item
+          v-if="auth.token"
+          clickable
+          v-ripple
+          to="/change-password"
+          @click="leftDrawerOpen = false"
+        >
+          <q-item-section avatar><q-icon name="lock_reset" /></q-item-section>
+          <q-item-section>Mot de passe</q-item-section>
         </q-item>
 
         <q-item v-if="auth.token" clickable v-ripple @click="logoutAndClose">
@@ -191,7 +231,9 @@
 
         <q-item v-if="auth.user" class="q-mt-sm">
           <q-item-section>
-            <div class="text-caption gt-user-pill-mobile" :title="userPillTitle">{{ userPill }}</div>
+            <div class="text-caption gt-user-pill-mobile" :title="userPillTitle">
+              {{ userPill }}
+            </div>
           </q-item-section>
         </q-item>
       </q-list>

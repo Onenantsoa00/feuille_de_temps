@@ -47,6 +47,10 @@ const routes = [
         path: "messages",
         component: () => import("pages/MessagesPage.vue"),
       },
+      {
+        path: "change-password",
+        component: () => import("pages/ChangePasswordPage.vue"),
+      },
     ],
   },
 ];

@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const userModel = require("../models/userModel");
+const { sendUserInvitationEmail } = require("../utils/emailService");
 const normalizeRole = (role) => {
   if (role === "chef" || role === "chef_mission") return "chef_de_mission";
   if (role === "employe") return "collaborateur";
@@ -29,8 +30,24 @@ const createUser = async (req, res) => {
       is_validated: normalizeRole(req.user.role) === "chef_de_mission" ? false : true,
     });
 
+    let invitationSent = false;
+    try {
+      await sendUserInvitationEmail({
+        to: email,
+        firstName: first_name,
+        email,
+        plainPassword: password,
+      });
+      invitationSent = true;
+    } catch (mailError) {
+      console.error("INVITATION EMAIL ERROR:", mailError.message);
+    }
+
     res.status(201).json({
-      message: "Utilisateur créé",
+      message: invitationSent
+        ? "Utilisateur créé et invitation envoyée"
+        : "Utilisateur créé mais invitation email non envoyée",
+      invitation_sent: invitationSent,
       user: newUser,
     });
   } catch (error) {
@@ -39,6 +56,55 @@ const createUser = async (req, res) => {
       return res.status(400).json({ message: "Cet email est déjà utilisé" });
     }
     res.status(500).json({ message: "Erreur création user" });
+  }
+};
+
+const updateUser = async (req, res) => {
+  try {
+    const user = await userModel.updateUserProfile(Number(req.params.id), req.body);
+    if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
+    res.json({ message: "Utilisateur modifié", user });
+  } catch (error) {
+    console.error(error);
+    if (error.code === "23505") {
+      return res.status(400).json({ message: "Cet email est déjà utilisé" });
+    }
+    res.status(500).json({ message: "Erreur modification utilisateur" });
+  }
+};
+
+const getUserMissions = async (req, res) => {
+  try {
+    const missions = await userModel.getUserAssignedMissions(Number(req.params.id));
+    res.json(missions);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erreur récupération missions utilisateur" });
+  }
+};
+
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || String(newPassword).length < 6) {
+      return res
+        .status(400)
+        .json({ message: "Nouveau mot de passe requis (6 caractères minimum)" });
+    }
+    const currentUser = await userModel.getUserByIdWithPassword(req.user.id);
+    if (!currentUser) {
+      return res.status(404).json({ message: "Utilisateur introuvable" });
+    }
+    const isMatch = await bcrypt.compare(currentPassword || "", currentUser.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Mot de passe actuel incorrect" });
+    }
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await userModel.updatePassword(req.user.id, hashedPassword);
+    res.json({ message: "Mot de passe modifié" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erreur modification mot de passe" });
   }
 };
 
@@ -83,4 +149,7 @@ module.exports = {
   getUsers,
   getPendingEmployees,
   validateEmployee,
+  changePassword,
+  updateUser,
+  getUserMissions,
 };

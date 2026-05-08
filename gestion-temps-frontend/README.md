@@ -42,4 +42,7 @@ quasar build
 
 See [Configuring quasar.config.js](https://v2.quasar.dev/quasar-cli-vite/quasar-config-js).
 
-Admin123!
+quand ça marche dans dev voici le push dans prod : 
+git checkout main
+git merge dev
+git push origin main

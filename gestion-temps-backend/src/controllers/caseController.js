@@ -57,6 +57,20 @@ const createCase = async (req, res) => {
   }
 };
 
+const updateCase = async (req, res) => {
+  try {
+    const existing = await caseModel.getCaseById(Number(req.params.id));
+    if (!existing) {
+      return res.status(404).json({ message: "Mission introuvable" });
+    }
+    const row = await caseModel.updateCase(Number(req.params.id), req.body);
+    res.json(row);
+  } catch (error) {
+    console.error("UPDATE CASE ERROR:", error);
+    res.status(500).json({ message: "Erreur modification mission" });
+  }
+};
+
 const setAssignments = async (req, res) => {
   try {
     const { id } = req.params;
@@ -170,6 +184,7 @@ const finishCase = async (req, res) => {
 module.exports = {
   getCases,
   createCase,
+  updateCase,
   setAssignments,
   getAssignments,
   getPendingCases,

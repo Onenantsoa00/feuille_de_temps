@@ -19,12 +19,14 @@
         />
 
         <q-select
-          v-model="chef_id"
+          v-model="chef_ids"
           :options="chefs"
           :option-label="userLabel"
           option-value="id"
           emit-value
           map-options
+          multiple
+          use-chips
           label="Chef de mission"
           outlined
           dense
@@ -34,11 +36,32 @@
 
         <q-input v-model="start_date" label="Date début" type="date" outlined dense />
 
-        <q-input v-model="end_date" label="Date fin" type="date" outlined dense />
+        <q-toggle v-model="endDateIndefinite" label="Date fin indéfinie" />
+        <q-input
+          v-model="end_date"
+          label="Date fin"
+          type="date"
+          outlined
+          dense
+          :disable="endDateIndefinite"
+        />
       </q-card-section>
 
       <q-card-actions align="right">
-        <q-btn label="Ajouter" color="primary" unelevated class="action-btn" @click="addCase" />
+        <q-btn
+          :label="editingCaseId ? 'Modifier' : 'Ajouter'"
+          color="primary"
+          unelevated
+          class="action-btn"
+          @click="saveCase"
+        />
+        <q-btn
+          v-if="editingCaseId"
+          flat
+          color="grey-8"
+          label="Annuler"
+          @click="resetForm"
+        />
       </q-card-actions>
     </q-card>
 
@@ -72,6 +95,9 @@
             </q-item-section>
             <q-item-section v-if="canAssignForCase(c)" side>
               <q-btn flat color="primary" label="Employés" @click="openAssign(c)" />
+            </q-item-section>
+            <q-item-section v-if="auth.canCreateMission" side>
+              <q-btn flat color="secondary" label="Modifier" @click="startEdit(c)" />
             </q-item-section>
             <q-item-section v-if="Number(c.status) === 0 && auth.isAdmin" side>
               <q-btn color="primary" flat label="Valider" @click="validateCase(c.id)" />
@@ -167,10 +193,12 @@ const pendingCases = ref([])
 
 const name = ref('')
 const company_id = ref(null)
-const chef_id = ref(null)
+const chef_ids = ref([])
+const editingCaseId = ref(null)
 const description = ref('')
 const start_date = ref('')
 const end_date = ref('')
+const endDateIndefinite = ref(false)
 
 const assignOpen = ref(false)
 const assignCase = ref(null)
@@ -186,7 +214,11 @@ const employees = computed(() =>
   users.value.filter((u) => ['employe', 'collaborateur'].includes(u.role))
 )
 const chefMissions = computed(() =>
-  cases.value.filter((c) => c.user_id === auth.user?.id)
+  cases.value.filter((c) => {
+    if (c.user_id === auth.user?.id) return true
+    const assignedChefs = Array.isArray(c.assigned_chefs) ? c.assigned_chefs : []
+    return assignedChefs.some((u) => u.id === auth.user?.id)
+  })
 )
 const missionCards = computed(() => (auth.isAdmin ? cases.value : chefMissions.value))
 
@@ -196,12 +228,17 @@ const userLabel = (u) => {
 }
 
 const chefDisplay = (c) => {
-  const a = [c.chef_first_name, c.chef_name].filter(Boolean).join(' ').trim()
-  return a || '—'
+  const primary = [c.chef_first_name, c.chef_name].filter(Boolean).join(' ').trim()
+  const assignedChefs = Array.isArray(c.assigned_chefs) ? c.assigned_chefs : []
+  const others = assignedChefs
+    .map((u) => [u.first_name, u.name].filter(Boolean).join(' ').trim() || u.email)
+    .filter(Boolean)
+  const all = [primary, ...others].filter(Boolean)
+  return all.length ? [...new Set(all)].join(', ') : '—'
 }
 
 const formatDate = (value) => {
-  if (!value) return '—'
+  if (!value) return 'Indéfinie'
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
   return d.toLocaleDateString('fr-FR')
@@ -210,7 +247,11 @@ const formatDate = (value) => {
 const canAssignForCase = (c) => {
   if (Number(c.status) !== 1) return false
   if (auth.isAdmin) return true
-  if (['chef', 'chef_mission', 'chef_de_mission'].includes(auth.role) && c.user_id === auth.user?.id) return true
+  if (['chef', 'chef_mission', 'chef_de_mission'].includes(auth.role)) {
+    if (c.user_id === auth.user?.id) return true
+    const assignedChefs = Array.isArray(c.assigned_chefs) ? c.assigned_chefs : []
+    return assignedChefs.some((u) => u.id === auth.user?.id)
+  }
   return false
 }
 const assignedCollaboratorsDisplay = (c) => {
@@ -273,33 +314,64 @@ const finishCase = async (id) => {
   }
 }
 
-const addCase = async () => {
+const resetForm = () => {
+  editingCaseId.value = null
+  name.value = ''
+  company_id.value = null
+  chef_ids.value = []
+  description.value = ''
+  start_date.value = ''
+  end_date.value = ''
+  endDateIndefinite.value = false
+}
+
+const startEdit = (c) => {
+  editingCaseId.value = c.id
+  name.value = c.name ?? ''
+  company_id.value = c.company_id ?? null
+  const assignedChefs = Array.isArray(c.assigned_chefs) ? c.assigned_chefs.map((u) => u.id) : []
+  chef_ids.value = [...new Set([c.user_id, ...assignedChefs].filter(Boolean))]
+  description.value = c.description ?? ''
+  start_date.value = c.start_date ? new Date(c.start_date).toISOString().slice(0, 10) : ''
+  end_date.value = c.end_date ? new Date(c.end_date).toISOString().slice(0, 10) : ''
+  endDateIndefinite.value = !c.end_date
+}
+
+const saveCase = async () => {
   if (!name.value?.trim()) {
     Notify.create({ type: 'warning', message: 'Indiquez un nom de mission' })
     return
   }
+  if (!chef_ids.value.length) {
+    Notify.create({ type: 'warning', message: 'Sélectionnez au moins un chef de mission' })
+    return
+  }
   try {
-    await api.post('/cases', {
+    const isEditing = Boolean(editingCaseId.value)
+    const payload = {
       name: name.value.trim(),
       company_id: company_id.value,
-      chef_id: chef_id.value,
+      chef_id: chef_ids.value[0],
+      chef_ids: chef_ids.value,
       description: description.value,
       start_date: start_date.value,
-      end_date: end_date.value,
-    })
-    name.value = ''
-    company_id.value = null
-    chef_id.value = null
-    description.value = ''
-    start_date.value = ''
-    end_date.value = ''
+      end_date: endDateIndefinite.value ? null : (end_date.value || null),
+    }
+    if (isEditing) {
+      await api.put(`/cases/${editingCaseId.value}`, payload)
+    } else {
+      await api.post('/cases', payload)
+    }
+    resetForm()
     await loadData()
     const isSec = auth.isSecretaire
     Notify.create({
       type: isSec ? 'info' : 'positive',
-      message: isSec
-        ? 'Mission enregistrée — en attente de validation par l’administrateur'
-        : 'Mission ajoutée',
+      message: isEditing
+        ? 'Mission modifiée'
+        : isSec
+          ? 'Mission enregistrée — en attente de validation par l’administrateur'
+          : 'Mission ajoutée',
     })
   } catch (e) {
     console.error(e)

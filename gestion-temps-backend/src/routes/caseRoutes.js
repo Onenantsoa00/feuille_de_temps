@@ -6,6 +6,7 @@ const requireRole = require("../middlewares/requireRole");
 const {
   getCases,
   createCase,
+  updateCase,
   setAssignments,
   getAssignments,
   getPendingCases,
@@ -19,6 +20,12 @@ router.post(
   verifyToken,
   requireRole("admin", "expert_comptable", "secretaire"),
   createCase,
+);
+router.put(
+  "/:id",
+  verifyToken,
+  requireRole("admin", "expert_comptable", "secretaire"),
+  updateCase,
 );
 router.get(
   "/pending-validation",
