@@ -10,7 +10,7 @@ const getEntityCounts = async () => {
   const missions = await pool.query(`SELECT COUNT(*)::int AS n FROM cases`);
   const societes = await pool.query(`SELECT COUNT(*)::int AS n FROM companies`);
   const collaborateurs = await pool.query(
-    `SELECT COUNT(*)::int AS n FROM users WHERE role IN ('collaborateur', 'employe')`
+    `SELECT COUNT(*)::int AS n FROM users WHERE role IN ('collaborateur', 'employe')`,
   );
   return {
     missions: missions.rows[0].n,
@@ -28,8 +28,8 @@ const getMissionSummaries = async ({ period }) => {
   const result = await pool.query(
     `SELECT
        ${dateTruncExpr}::text AS period_start,
-       c.id AS mission_id,
-       c.name AS mission_name,
+       COALESCE(c.id, 0) AS mission_id,
+       COALESCE(c.name, '(sans mission)') AS mission_name,
        COALESCE(comp.name, '—') AS company_name,
        COUNT(DISTINCT wh.user_id)::int AS participants_count,
        COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours
@@ -37,8 +37,9 @@ const getMissionSummaries = async ({ period }) => {
      LEFT JOIN tasks t ON t.id = wh.task_id
      LEFT JOIN cases c ON c.id = t.case_id
      LEFT JOIN companies comp ON comp.id = c.company_id
-     GROUP BY ${dateTruncExpr}, c.id, c.name, comp.name
-     ORDER BY period_start DESC, total_hours DESC, c.name ASC`
+     GROUP BY ${dateTruncExpr}, COALESCE(c.id, 0), COALESCE(c.name, '(sans mission)'), comp.name
+     ORDER BY period_start DESC, total_hours DESC, mission_name ASC`,
+    [],
   );
   return result.rows;
 };
@@ -73,26 +74,26 @@ const getMissionReportsForMonth = async (monthStr) => {
        AND wh.work_date < ($1::date + INTERVAL '1 month')
      GROUP BY DATE_TRUNC('week', wh.work_date), c.id, c.name, comp.name
      ORDER BY period_start ASC, total_hours DESC, c.name ASC`,
-    params
+    params,
   );
 
   const monthly = await pool.query(
     `SELECT
        $1::text AS period_start,
-       c.id AS mission_id,
-       c.name AS mission_name,
-       COALESCE(comp.name, '—') AS company_name,
-       COUNT(DISTINCT wh.user_id)::int AS participants_count,
-       COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours
-     FROM work_hours wh
-     LEFT JOIN tasks t ON t.id = wh.task_id
-     LEFT JOIN cases c ON c.id = t.case_id
-     LEFT JOIN companies comp ON comp.id = c.company_id
-     WHERE wh.work_date >= $1::date
-       AND wh.work_date < ($1::date + INTERVAL '1 month')
-     GROUP BY c.id, c.name, comp.name
-     ORDER BY total_hours DESC, c.name ASC`,
-    params
+      COALESCE(c.id, 0) AS mission_id,
+      COALESCE(c.name, '(sans mission)') AS mission_name,
+      COALESCE(comp.name, '—') AS company_name,
+      COUNT(DISTINCT wh.user_id)::int AS participants_count,
+      COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours
+    FROM work_hours wh
+    LEFT JOIN tasks t ON t.id = wh.task_id
+    LEFT JOIN cases c ON c.id = t.case_id
+    LEFT JOIN companies comp ON comp.id = c.company_id
+    WHERE wh.work_date >= $1::date
+      AND wh.work_date < ($1::date + INTERVAL '1 month')
+    GROUP BY COALESCE(c.id, 0), COALESCE(c.name, '(sans mission)'), comp.name
+    ORDER BY total_hours DESC, mission_name ASC`,
+    params,
   );
 
   return { month, weekly: weekly.rows, monthly: monthly.rows };
@@ -124,7 +125,7 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
        AND wh.work_date < ($1::date + INTERVAL '1 month')
      GROUP BY DATE_TRUNC('week', wh.work_date), u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, comp.name
      ORDER BY period_start ASC, user_name ASC, mission_name ASC`,
-    params
+    params,
   );
 
   const monthly = await pool.query(
@@ -148,7 +149,7 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
        AND wh.work_date < ($1::date + INTERVAL '1 month')
      GROUP BY u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, comp.name
      ORDER BY user_name ASC, mission_name ASC`,
-    params
+    params,
   );
 
   return { month, weekly: weekly.rows, monthly: monthly.rows };
@@ -156,8 +157,8 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
 
 const getTopMissions = async (limit = 10) => {
   const result = await pool.query(
-    `SELECT c.id AS mission_id,
-            c.name AS mission_name,
+    `SELECT COALESCE(c.id, 0) AS mission_id,
+            COALESCE(c.name, '(sans mission)') AS mission_name,
             COALESCE(comp.name, '—') AS company_name,
             COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours,
             COUNT(DISTINCT wh.user_id)::int AS participants_count
@@ -165,11 +166,11 @@ const getTopMissions = async (limit = 10) => {
      LEFT JOIN tasks t ON t.id = wh.task_id
      LEFT JOIN cases c ON c.id = t.case_id
      LEFT JOIN companies comp ON comp.id = c.company_id
-     GROUP BY c.id, c.name, comp.name
+     GROUP BY COALESCE(c.id, 0), COALESCE(c.name, '(sans mission)'), comp.name
      HAVING COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) > 0
      ORDER BY total_hours DESC
      LIMIT $1`,
-    [limit]
+    [limit],
   );
   return result.rows;
 };
@@ -187,7 +188,7 @@ const getTopCollaborateurs = async (limit = 10) => {
      GROUP BY u.id, u.first_name, u.name, u.email, u.role
      ORDER BY total_hours DESC
      LIMIT $1`,
-    [limit]
+    [limit],
   );
   return result.rows;
 };
@@ -195,8 +196,8 @@ const getTopCollaborateurs = async (limit = 10) => {
 const getMissionParticipationDetails = async () => {
   const result = await pool.query(
     `SELECT
-       c.id AS mission_id,
-       c.name AS mission_name,
+       COALESCE(c.id, 0) AS mission_id,
+       COALESCE(c.name, '(sans mission)') AS mission_name,
        COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.name)), ''), u.email) AS user_name,
        u.role,
        COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours
@@ -204,8 +205,8 @@ const getMissionParticipationDetails = async () => {
      LEFT JOIN tasks t ON t.id = wh.task_id
      LEFT JOIN cases c ON c.id = t.case_id
      JOIN users u ON u.id = wh.user_id
-     GROUP BY c.id, c.name, user_name, u.role
-     ORDER BY c.name ASC, total_hours DESC`
+     GROUP BY COALESCE(c.id, 0), COALESCE(c.name, '(sans mission)'), user_name, u.role
+     ORDER BY mission_name ASC, total_hours DESC`,
   );
   return result.rows;
 };
@@ -236,7 +237,7 @@ const getAdminTaskTraces = async () => {
      LEFT JOIN companies comp ON comp.id = c.company_id
      LEFT JOIN users ch ON ch.id = c.user_id
      ORDER BY wh.work_date DESC, wh.work_hour_id DESC
-     LIMIT 200`
+     LIMIT 200`,
   );
   return result.rows;
 };
@@ -244,14 +245,13 @@ const getAdminTaskTraces = async () => {
 const getMissionDeadlines = async () => {
   const result = await pool.query(
     `SELECT c.id AS mission_id,
-            c.name AS mission_name,
+            COALESCE(c.name, '(sans mission)') AS mission_name,
             COALESCE(comp.name, '—') AS company_name,
             c.end_date::text AS end_date,
             c.status
      FROM cases c
      LEFT JOIN companies comp ON comp.id = c.company_id
-     WHERE c.end_date IS NOT NULL
-     ORDER BY c.end_date ASC`
+     ORDER BY c.end_date IS NULL, c.end_date ASC`,
   );
   return result.rows;
 };
@@ -282,7 +282,7 @@ const getScopedTaskTraces = async ({ userId, role }) => {
           OR c.id IN (SELECT case_id FROM case_assignments WHERE user_id = $1)
        ORDER BY wh.work_date DESC, wh.work_hour_id DESC
        LIMIT 200`,
-      [userId]
+      [userId],
     );
     return result.rows;
   }
@@ -306,7 +306,7 @@ const getScopedTaskTraces = async ({ userId, role }) => {
        WHERE wh.user_id = $1
        ORDER BY wh.work_date DESC, wh.work_hour_id DESC
        LIMIT 200`,
-      [userId]
+      [userId],
     );
     return result.rows;
   }
@@ -324,7 +324,7 @@ const getCollaborateurStats = async ({ userId }) => {
        GROUP BY task_name
        ORDER BY total_hours DESC
        LIMIT 8`,
-      [userId]
+      [userId],
     ),
     pool.query(
       `SELECT c.id AS mission_id,
@@ -339,7 +339,7 @@ const getCollaborateurStats = async ({ userId }) => {
        GROUP BY c.id, c.name, comp.name
        ORDER BY total_hours DESC
        LIMIT 8`,
-      [userId]
+      [userId],
     ),
     pool.query(
       `SELECT DATE_TRUNC('month', work_date)::date::text AS month_start,
@@ -349,13 +349,13 @@ const getCollaborateurStats = async ({ userId }) => {
        GROUP BY month_start
        ORDER BY month_start DESC
        LIMIT 12`,
-      [userId]
+      [userId],
     ),
     pool.query(
       `SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (end_time - start_time))/3600), 0) AS total_hours
        FROM work_hours
        WHERE user_id = $1`,
-      [userId]
+      [userId],
     ),
   ]);
 
@@ -393,14 +393,18 @@ const getRoleDashboard = async ({ userId, role }) => {
 
     const totalHours = taskTraces.reduce(
       (acc, row) => acc + Number(row.duration_hours || 0),
-      0
+      0,
     );
 
     return {
       role: normalizedRole,
       cards: [
         { key: "missions", label: "Missions", value: counts.missions },
-        { key: "collaborateurs", label: "Collaborateurs", value: counts.collaborateurs },
+        {
+          key: "collaborateurs",
+          label: "Collaborateurs",
+          value: counts.collaborateurs,
+        },
         { key: "societes", label: "Sociétés", value: counts.societes },
         { key: "heures", label: "Heures totales", value: totalHours },
       ],
@@ -415,7 +419,11 @@ const getRoleDashboard = async ({ userId, role }) => {
       printMode: {
         available: true,
         reportLinks: true,
-        sections: ["traces", "weeklyMissionSummaries", "monthlyMissionSummaries"],
+        sections: [
+          "traces",
+          "weeklyMissionSummaries",
+          "monthlyMissionSummaries",
+        ],
       },
       weeklyMissionSummaries,
       monthlyMissionSummaries,
@@ -432,13 +440,21 @@ const getRoleDashboard = async ({ userId, role }) => {
     return {
       role: normalizedRole,
       cards: [
-        { key: "total", label: "Heures totales", value: collaboratorStats.totalHours },
+        {
+          key: "total",
+          label: "Heures totales",
+          value: collaboratorStats.totalHours,
+        },
         {
           key: "missions",
           label: "Missions contribuees",
           value: collaboratorStats.missionContributions.length,
         },
-        { key: "tasks", label: "Taches actives", value: collaboratorStats.topTasks.length },
+        {
+          key: "tasks",
+          label: "Taches actives",
+          value: collaboratorStats.topTasks.length,
+        },
       ],
       taskTraces,
       missionSeries: [],
@@ -461,10 +477,13 @@ const getRoleDashboard = async ({ userId, role }) => {
   }
 
   if (normalizedRole === "secretaire" || normalizedRole === "chef_de_mission") {
-    const taskTraces = await getScopedTaskTraces({ userId, role: normalizedRole });
+    const taskTraces = await getScopedTaskTraces({
+      userId,
+      role: normalizedRole,
+    });
     const totalHours = taskTraces.reduce(
       (acc, row) => acc + Number(row.duration_hours || 0),
-      0
+      0,
     );
     return {
       role: normalizedRole,
@@ -510,4 +529,3 @@ module.exports = {
   getMissionReportsForMonth,
   getCollaboratorReportsForMonth,
 };
-
