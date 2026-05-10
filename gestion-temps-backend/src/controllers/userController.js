@@ -27,7 +27,8 @@ const createUser = async (req, res) => {
       role,
       company_id: company_id ?? null,
       created_by: req.user.id,
-      is_validated: normalizeRole(req.user.role) === "chef_de_mission" ? false : true,
+      is_validated:
+        normalizeRole(req.user.role) === "chef_de_mission" ? false : true,
     });
 
     let invitationSent = false;
@@ -61,8 +62,12 @@ const createUser = async (req, res) => {
 
 const updateUser = async (req, res) => {
   try {
-    const user = await userModel.updateUserProfile(Number(req.params.id), req.body);
-    if (!user) return res.status(404).json({ message: "Utilisateur introuvable" });
+    const user = await userModel.updateUserProfile(
+      Number(req.params.id),
+      req.body,
+    );
+    if (!user)
+      return res.status(404).json({ message: "Utilisateur introuvable" });
     res.json({ message: "Utilisateur modifié", user });
   } catch (error) {
     console.error(error);
@@ -75,11 +80,15 @@ const updateUser = async (req, res) => {
 
 const getUserMissions = async (req, res) => {
   try {
-    const missions = await userModel.getUserAssignedMissions(Number(req.params.id));
+    const missions = await userModel.getUserAssignedMissions(
+      Number(req.params.id),
+    );
     res.json(missions);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Erreur récupération missions utilisateur" });
+    res
+      .status(500)
+      .json({ message: "Erreur récupération missions utilisateur" });
   }
 };
 
@@ -87,20 +96,23 @@ const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!newPassword || String(newPassword).length < 6) {
-      return res
-        .status(400)
-        .json({ message: "Nouveau mot de passe requis (6 caractères minimum)" });
+      return res.status(400).json({
+        message: "Nouveau mot de passe requis (6 caractères minimum)",
+      });
     }
     const currentUser = await userModel.getUserByIdWithPassword(req.user.id);
     if (!currentUser) {
       return res.status(404).json({ message: "Utilisateur introuvable" });
     }
-    const isMatch = await bcrypt.compare(currentPassword || "", currentUser.password);
+    const isMatch = await bcrypt.compare(
+      currentPassword || "",
+      currentUser.password,
+    );
     if (!isMatch) {
       return res.status(400).json({ message: "Mot de passe actuel incorrect" });
     }
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await userModel.updatePassword(req.user.id, hashedPassword);
+    await userModel.updatePassword(req.user.id, hashedPassword, newPassword);
     res.json({ message: "Mot de passe modifié" });
   } catch (error) {
     console.error(error);
@@ -108,12 +120,40 @@ const changePassword = async (req, res) => {
   }
 };
 
+const adminChangeUserPassword = async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({
+        message: "Nouveau mot de passe requis (6 caractères minimum)",
+      });
+    }
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const user = await userModel.updatePassword(
+      Number(req.params.id),
+      hashedPassword,
+      newPassword,
+    );
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur introuvable" });
+    }
+    res.json({ message: "Mot de passe modifié" });
+  } catch (error) {
+    console.error(error);
+    res
+      .status(500)
+      .json({ message: "Erreur modification mot de passe utilisateur" });
+  }
+};
+
 const getUsers = async (req, res) => {
   try {
     const roleFilter = req.query.role || undefined;
+    const isAdmin = normalizeRole(req.user.role) === "admin";
     const users = await userModel.getAllUsers({
       role: roleFilter,
       actor: req.user,
+      includePlainPassword: isAdmin,
     });
     res.json(users);
   } catch (error) {
@@ -127,7 +167,9 @@ const getPendingEmployees = async (_req, res) => {
     res.json(users);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Erreur récupération validations employés" });
+    res
+      .status(500)
+      .json({ message: "Erreur récupération validations employés" });
   }
 };
 
@@ -152,4 +194,5 @@ module.exports = {
   changePassword,
   updateUser,
   getUserMissions,
+  adminChangeUserPassword,
 };

@@ -6,7 +6,13 @@
       <q-card-section class="q-gutter-md">
         <div class="text-subtitle2">Nouveau compte</div>
         <div class="row q-col-gutter-sm">
-          <q-input v-model="form.first_name" class="col-12 col-sm-6" label="Prénom" outlined dense />
+          <q-input
+            v-model="form.first_name"
+            class="col-12 col-sm-6"
+            label="Prénom"
+            outlined
+            dense
+          />
           <q-input v-model="form.name" class="col-12 col-sm-6" label="Nom" outlined dense />
         </div>
         <q-input v-model="form.email" label="Email" outlined dense type="email" />
@@ -55,13 +61,13 @@
     <q-card class="gt-card gt-enter-up gt-delay-1">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">
-          {{ auth.canManageUsers ? "Liste" : "Annuaire interne" }}
+          {{ auth.canManageUsers ? 'Liste' : 'Annuaire interne' }}
         </div>
         <q-list bordered separator>
           <q-item v-for="u in users" :key="u.id" class="gt-list-item">
             <q-item-section>
               <q-item-label>
-                {{ [u.first_name, u.name].filter(Boolean).join(" ") || u.email }}
+                {{ [u.first_name, u.name].filter(Boolean).join(' ') || u.email }}
               </q-item-label>
               <q-item-label caption>{{ u.email }} — {{ roleLabel(u.role) }}</q-item-label>
             </q-item-section>
@@ -76,6 +82,15 @@
                     <q-item clickable v-close-popup @click="openEdit(u)">
                       <q-item-section avatar><q-icon name="edit" /></q-item-section>
                       <q-item-section>Modification</q-item-section>
+                    </q-item>
+                    <q-item
+                      v-if="auth.isAdmin"
+                      clickable
+                      v-close-popup
+                      @click="openPasswordChange(u)"
+                    >
+                      <q-item-section avatar><q-icon name="lock" /></q-item-section>
+                      <q-item-section>Modifier mot de passe</q-item-section>
                     </q-item>
                   </q-list>
                 </q-menu>
@@ -93,7 +108,7 @@
           <q-item v-for="u in pendingEmployees" :key="`pending-user-${u.id}`" class="gt-list-item">
             <q-item-section>
               <q-item-label>
-                {{ [u.first_name, u.name].filter(Boolean).join(" ") || u.email }}
+                {{ [u.first_name, u.name].filter(Boolean).join(' ') || u.email }}
               </q-item-label>
               <q-item-label caption>{{ u.email }}</q-item-label>
             </q-item-section>
@@ -154,7 +169,7 @@
           <q-list bordered separator>
             <q-item v-for="m in consultMissions" :key="`m-${m.id}`">
               <q-item-section>
-                <q-item-label>{{ m.name }} — {{ m.company_name || "—" }}</q-item-label>
+                <q-item-label>{{ m.name }} — {{ m.company_name || '—' }}</q-item-label>
                 <q-item-label caption>
                   {{ formatMissionDate(m.start_date) }} -> {{ formatMissionDate(m.end_date) }}
                 </q-item-label>
@@ -170,134 +185,209 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <q-dialog v-model="passwordChangeOpen">
+      <q-card style="min-width: 360px; max-width: 95vw">
+        <q-card-section class="text-h6">Modifier mot de passe utilisateur</q-card-section>
+        <q-card-section class="q-gutter-md">
+          <div class="text-subtitle2 q-mb-sm">{{ passwordChangeTitle }}</div>
+          <q-input
+            v-model="passwordChangeForm.newPassword"
+            type="password"
+            label="Nouveau mot de passe"
+            outlined
+            dense
+          />
+          <q-input
+            v-model="passwordChangeForm.confirmPassword"
+            type="password"
+            label="Confirmer le mot de passe"
+            outlined
+            dense
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Annuler" v-close-popup @click="resetPasswordChangeForm" />
+          <q-btn color="primary" label="Enregistrer" @click="savePasswordChange" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { Notify } from "quasar";
-import { api } from "src/boot/axios";
-import { useAuthStore } from "src/stores/auth";
+import { ref, computed, onMounted } from 'vue'
+import { Notify } from 'quasar'
+import { api } from 'src/boot/axios'
+import { useAuthStore } from 'src/stores/auth'
 
-const auth = useAuthStore();
+const auth = useAuthStore()
 
 const allRoles = [
-  { label: "Administrateur", value: "admin" },
-  { label: "Expert comptable", value: "expert_comptable" },
-  { label: "Secrétaire", value: "secretaire" },
-  { label: "Chef de mission", value: "chef_de_mission" },
-  { label: "Collaborateur", value: "collaborateur" },
-];
+  { label: 'Administrateur', value: 'admin' },
+  { label: 'Expert comptable', value: 'expert_comptable' },
+  { label: 'Secrétaire', value: 'secretaire' },
+  { label: 'Chef de mission', value: 'chef_de_mission' },
+  { label: 'Collaborateur', value: 'collaborateur' },
+]
 
 const roleOptions = computed(() => {
-  if (auth.isAdmin || auth.isExpertComptable) return allRoles;
+  if (auth.isAdmin || auth.isExpertComptable) return allRoles
   if (auth.isSecretaire) {
-    return allRoles.filter((r) =>
-      ["chef_de_mission", "collaborateur"].includes(r.value)
-    );
+    return allRoles.filter((r) => ['chef_de_mission', 'collaborateur'].includes(r.value))
   }
-  return allRoles.filter((r) => r.value === "collaborateur");
-});
+  return allRoles.filter((r) => r.value === 'collaborateur')
+})
 
 const roleLabel = (r) => {
   const normalized =
-    r === "chef" || r === "chef_mission"
-      ? "chef_de_mission"
-      : r === "employe"
-        ? "collaborateur"
-        : r;
-  return allRoles.find((x) => x.value === normalized)?.label ?? normalized;
-};
+    r === 'chef' || r === 'chef_mission' ? 'chef_de_mission' : r === 'employe' ? 'collaborateur' : r
+  return allRoles.find((x) => x.value === normalized)?.label ?? normalized
+}
 
-const users = ref([]);
-const companies = ref([]);
-const pendingEmployees = ref([]);
-const showPassword = ref(false);
-const editOpen = ref(false);
-const consultOpen = ref(false);
+const users = ref([])
+const companies = ref([])
+const pendingEmployees = ref([])
+const showPassword = ref(false)
+const passwordChangeOpen = ref(false)
+const passwordChangeTitle = ref('')
+const passwordChangeForm = ref({
+  user_id: null,
+  newPassword: '',
+  confirmPassword: '',
+})
+const editOpen = ref(false)
+const consultOpen = ref(false)
 const editForm = ref({
   id: null,
-  first_name: "",
-  name: "",
-  email: "",
-  role: "collaborateur",
+  first_name: '',
+  name: '',
+  email: '',
+  role: 'collaborateur',
   company_id: null,
-});
-const consultMissions = ref([]);
-const consultUserLabel = ref("");
-const consultUserEmail = ref("");
+})
+const consultMissions = ref([])
+const consultUserLabel = ref('')
+const consultUserEmail = ref('')
 const form = ref({
-  first_name: "",
-  name: "",
-  email: "",
-  password: "",
-  role: "collaborateur",
+  first_name: '',
+  name: '',
+  email: '',
+  password: '',
+  role: 'collaborateur',
   company_id: null,
-});
+})
 
 const load = async () => {
   try {
-    const [u, c] = await Promise.all([api.get("/users"), api.get("/companies")]);
-    users.value = u.data;
-    companies.value = c.data;
+    const [u, c] = await Promise.all([api.get('/users'), api.get('/companies')])
+    users.value = u.data
+    companies.value = c.data
     if (auth.isAdmin) {
-      const pending = await api.get("/users/pending-employee-validations");
-      pendingEmployees.value = pending.data;
+      const pending = await api.get('/users/pending-employee-validations')
+      pendingEmployees.value = pending.data
     } else {
-      pendingEmployees.value = [];
+      pendingEmployees.value = []
     }
   } catch (e) {
     Notify.create({
-      type: "negative",
-      message: e.response?.data?.message ?? "Erreur chargement utilisateurs",
-    });
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur chargement utilisateurs',
+    })
   }
-};
+}
 
 const create = async () => {
   try {
-    const response = await api.post("/users", {
+    const response = await api.post('/users', {
       first_name: form.value.first_name || null,
       name: form.value.name || null,
       email: form.value.email,
       password: form.value.password,
       role: form.value.role,
       company_id: form.value.company_id,
-    });
+    })
     form.value = {
-      first_name: "",
-      name: "",
-      email: "",
-      password: "",
-      role: "collaborateur",
+      first_name: '',
+      name: '',
+      email: '',
+      password: '',
+      role: 'collaborateur',
       company_id: null,
-    };
-    await load();
+    }
+    await load()
     Notify.create({
-      type: response.data?.invitation_sent ? "positive" : "warning",
+      type: response.data?.invitation_sent ? 'positive' : 'warning',
       message:
-        response.data?.message ??
-        "Utilisateur créé (vérifiez l'état de l'envoi d'invitation)",
-    });
+        response.data?.message ?? "Utilisateur créé (vérifiez l'état de l'envoi d'invitation)",
+    })
   } catch (e) {
     Notify.create({
-      type: "negative",
-      message: e.response?.data?.message ?? "Erreur",
-    });
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur',
+    })
   }
-};
+}
 
 const openEdit = (user) => {
   editForm.value = {
     id: user.id,
-    first_name: user.first_name || "",
-    name: user.name || "",
-    email: user.email || "",
-    role: user.role || "collaborateur",
+    first_name: user.first_name || '',
+    name: user.name || '',
+    email: user.email || '',
+    role: user.role || 'collaborateur',
     company_id: user.company_id ?? null,
-  };
-  editOpen.value = true;
-};
+  }
+  editOpen.value = true
+}
+
+const openPasswordChange = (user) => {
+  passwordChangeForm.value = {
+    user_id: user.id,
+    newPassword: '',
+    confirmPassword: '',
+  }
+  passwordChangeTitle.value =
+    [user.first_name, user.name].filter(Boolean).join(' ').trim() || 'Utilisateur'
+  passwordChangeOpen.value = true
+}
+
+const resetPasswordChangeForm = () => {
+  passwordChangeForm.value = {
+    user_id: null,
+    newPassword: '',
+    confirmPassword: '',
+  }
+  passwordChangeTitle.value = ''
+}
+
+const savePasswordChange = async () => {
+  if (!passwordChangeForm.value.newPassword || passwordChangeForm.value.newPassword.length < 6) {
+    return Notify.create({
+      type: 'negative',
+      message: 'Le mot de passe doit contenir au moins 6 caractères.',
+    })
+  }
+  if (passwordChangeForm.value.newPassword !== passwordChangeForm.value.confirmPassword) {
+    return Notify.create({
+      type: 'negative',
+      message: 'Les mots de passe ne correspondent pas.',
+    })
+  }
+  try {
+    await api.put(`/users/${passwordChangeForm.value.user_id}/change-password`, {
+      newPassword: passwordChangeForm.value.newPassword,
+    })
+    passwordChangeOpen.value = false
+    resetPasswordChangeForm()
+    Notify.create({ type: 'positive', message: 'Mot de passe modifié' })
+  } catch (e) {
+    Notify.create({
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur modification mot de passe',
+    })
+  }
+}
 
 const saveEdit = async () => {
   try {
@@ -307,62 +397,64 @@ const saveEdit = async () => {
       email: editForm.value.email,
       role: editForm.value.role,
       company_id: editForm.value.company_id,
-    });
-    editOpen.value = false;
-    await load();
-    Notify.create({ type: "positive", message: "Utilisateur modifié" });
+    })
+    editOpen.value = false
+    await load()
+    Notify.create({ type: 'positive', message: 'Utilisateur modifié' })
   } catch (e) {
     Notify.create({
-      type: "negative",
-      message: e.response?.data?.message ?? "Erreur modification utilisateur",
-    });
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur modification utilisateur',
+    })
   }
-};
+}
 
 const formatMissionDate = (value) => {
-  if (!value) return "Indéfinie";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString("fr-FR");
-};
+  if (!value) return 'Indéfinie'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleDateString('fr-FR')
+}
 
 const openConsultation = async (user) => {
   consultUserLabel.value =
-    [user.first_name, user.name].filter(Boolean).join(" ").trim() || "Utilisateur";
-  consultUserEmail.value = user.email || "";
-  consultMissions.value = [];
-  consultOpen.value = true;
+    [user.first_name, user.name].filter(Boolean).join(' ').trim() || 'Utilisateur'
+  consultUserEmail.value = user.email || ''
+  consultMissions.value = []
+  consultOpen.value = true
   try {
-    const res = await api.get(`/users/${user.id}/missions`);
-    consultMissions.value = Array.isArray(res.data) ? res.data : [];
+    const res = await api.get(`/users/${user.id}/missions`)
+    consultMissions.value = Array.isArray(res.data) ? res.data : []
   } catch (e) {
     Notify.create({
-      type: "negative",
-      message: e.response?.data?.message ?? "Erreur consultation missions",
-    });
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur consultation missions',
+    })
   }
-};
+}
 
 const approveEmployee = async (id) => {
   try {
-    await api.put(`/users/${id}/validate`);
-    Notify.create({ type: "positive", message: "Collaborateur validé" });
-    await load();
+    await api.put(`/users/${id}/validate`)
+    Notify.create({ type: 'positive', message: 'Collaborateur validé' })
+    await load()
   } catch (e) {
     Notify.create({
-      type: "negative",
-      message: e.response?.data?.message ?? "Erreur validation employé",
-    });
+      type: 'negative',
+      message: e.response?.data?.message ?? 'Erreur validation employé',
+    })
   }
-};
+}
 
-onMounted(load);
+onMounted(load)
 </script>
 
 <style scoped>
 .action-btn {
   border-radius: 12px;
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease;
 }
 
 .action-btn:hover {

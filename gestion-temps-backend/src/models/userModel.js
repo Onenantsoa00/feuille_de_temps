@@ -1,9 +1,17 @@
 const pool = require("../config/db");
 
 let hasCompanyColumnCache = null;
+let hasPlainPasswordColumnCache = null;
 const BASE_PUBLIC_FIELDS = `id, name, first_name, email, role`;
-const getPublicFields = () =>
-  hasCompanyColumnCache ? `${BASE_PUBLIC_FIELDS}, company_id` : BASE_PUBLIC_FIELDS;
+const getPublicFields = (includePlainPassword = false) => {
+  let fields = hasCompanyColumnCache
+    ? `${BASE_PUBLIC_FIELDS}, company_id`
+    : BASE_PUBLIC_FIELDS;
+  if (includePlainPassword && hasPlainPasswordColumnCache) {
+    fields += ", plain_password";
+  }
+  return fields;
+};
 
 const ensureUsersCompanyColumnFlag = async () => {
   if (hasCompanyColumnCache !== null) return hasCompanyColumnCache;
@@ -17,6 +25,26 @@ const ensureUsersCompanyColumnFlag = async () => {
   hasCompanyColumnCache = result.rows.length > 0;
   return hasCompanyColumnCache;
 };
+
+const ensurePlainPasswordColumnFlag = async () => {
+  if (hasPlainPasswordColumnCache !== null) return hasPlainPasswordColumnCache;
+  const result = await pool.query(
+    `SELECT 1
+     FROM information_schema.columns
+     WHERE table_name = 'users'
+       AND column_name = 'plain_password'
+     LIMIT 1`,
+  );
+  hasPlainPasswordColumnCache = result.rows.length > 0;
+  if (!hasPlainPasswordColumnCache) {
+    await pool.query(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT`,
+    );
+    hasPlainPasswordColumnCache = true;
+  }
+  return hasPlainPasswordColumnCache;
+};
+
 const normalizeRole = (role) => {
   if (role === "chef" || role === "chef_mission") return "chef_de_mission";
   if (role === "employe") return "collaborateur";
@@ -35,26 +63,54 @@ const createUser = async (user) => {
   } = user;
 
   const hasCompanyColumn = await ensureUsersCompanyColumnFlag();
-  const insertSql = hasCompanyColumn
-    ? `INSERT INTO users (name, first_name, email, password, role, company_id, created_by, is_validated)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING ${getPublicFields()}`
-    : `INSERT INTO users (name, first_name, email, password, role, created_by, is_validated)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING ${getPublicFields()}`;
-  const params = hasCompanyColumn
-    ? [name, first_name, email, password, role, user.company_id ?? null, created_by, is_validated]
-    : [name, first_name, email, password, role, created_by, is_validated];
-  const result = await pool.query(insertSql, params);
+  const hasPlainPasswordColumn = await ensurePlainPasswordColumnFlag();
 
+  const columns = ["name", "first_name", "email", "password"];
+  const placeholders = ["$1", "$2", "$3", "$4"];
+  const params = [name, first_name, email, password];
+  let index = 5;
+
+  if (hasPlainPasswordColumn) {
+    columns.push("plain_password");
+    placeholders.push(`$${index++}`);
+    params.push(password);
+  }
+
+  columns.push("role");
+  placeholders.push(`$${index++}`);
+  params.push(role);
+
+  if (hasCompanyColumn) {
+    columns.push("company_id");
+    placeholders.push(`$${index++}`);
+    params.push(user.company_id ?? null);
+  }
+
+  columns.push("created_by", "is_validated");
+  placeholders.push(`$${index++}`, `$${index++}`);
+  params.push(created_by, is_validated);
+
+  const insertSql = `INSERT INTO users (${columns.join(", ")})
+       VALUES (${placeholders.join(", ")})
+       RETURNING ${getPublicFields(hasPlainPasswordColumn)}`;
+
+  const result = await pool.query(insertSql, params);
   return result.rows[0];
 };
 
-const getAllUsers = async ({ role: roleFilter, actor } = {}) => {
+const getAllUsers = async ({
+  role: roleFilter,
+  actor,
+  includePlainPassword = false,
+} = {}) => {
   await ensureUsersCompanyColumnFlag();
+  if (includePlainPassword) {
+    await ensurePlainPasswordColumnFlag();
+  }
+
   if (normalizeRole(actor?.role) === "chef_de_mission") {
     const result = await pool.query(
-      `SELECT DISTINCT ${getPublicFields()}
+      `SELECT DISTINCT ${getPublicFields(includePlainPassword)}
        FROM users u
        WHERE u.role IN ('collaborateur', 'employe')
          AND (
@@ -67,12 +123,12 @@ const getAllUsers = async ({ role: roleFilter, actor } = {}) => {
            )
          )
        ORDER BY u.id`,
-      [actor.id]
+      [actor.id],
     );
     return result.rows;
   }
 
-  let sql = `SELECT ${getPublicFields()} FROM users`;
+  let sql = `SELECT ${getPublicFields(includePlainPassword)} FROM users`;
   const params = [];
   if (roleFilter) {
     const normalizedRoleFilter = normalizeRole(roleFilter);
@@ -88,7 +144,7 @@ const getUserById = async (id) => {
   await ensureUsersCompanyColumnFlag();
   const result = await pool.query(
     `SELECT ${getPublicFields()} FROM users WHERE id = $1`,
-    [id]
+    [id],
   );
   return result.rows[0] || null;
 };
@@ -105,14 +161,21 @@ const getUserByIdWithPassword = async (id) => {
   return result.rows[0] || null;
 };
 
-const updatePassword = async (id, hashedPassword) => {
+const updatePassword = async (id, hashedPassword, plainPassword = null) => {
   await ensureUsersCompanyColumnFlag();
+  const hasPlainPasswordColumn = await ensurePlainPasswordColumnFlag();
+  const sets = [`password = $2`];
+  const params = [id, hashedPassword];
+  if (hasPlainPasswordColumn) {
+    sets.push(`plain_password = $3`);
+    params.push(plainPassword);
+  }
   const result = await pool.query(
     `UPDATE users
-     SET password = $2
+     SET ${sets.join(", ")}
      WHERE id = $1
-     RETURNING ${getPublicFields()}`,
-    [id, hashedPassword],
+     RETURNING ${getPublicFields(hasPlainPasswordColumn)}`,
+    params,
   );
   return result.rows[0] || null;
 };
@@ -170,7 +233,7 @@ const getPendingEmployeesCreatedByChefs = async () => {
      WHERE role IN ('collaborateur', 'employe')
        AND created_by IS NOT NULL
        AND COALESCE(is_validated, true) = false
-     ORDER BY id`
+     ORDER BY id`,
   );
   return result.rows;
 };
@@ -183,7 +246,7 @@ const validateEmployee = async (id) => {
      WHERE id = $1
        AND role IN ('collaborateur', 'employe')
      RETURNING ${getPublicFields()}`,
-    [id]
+    [id],
   );
   return result.rows[0] || null;
 };

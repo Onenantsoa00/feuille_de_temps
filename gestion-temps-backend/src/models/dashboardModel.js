@@ -53,6 +53,26 @@ const normalizeMonthParam = (monthStr) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
+const getAllMissionReports = async () => {
+  const result = await pool.query(
+    `SELECT
+       c.id AS mission_id,
+       COALESCE(c.name, '(sans mission)') AS mission_name,
+       COALESCE(comp.name, '—') AS company_name,
+       COUNT(DISTINCT wh.user_id)::int AS participants_count,
+       COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours,
+       c.start_date::text AS start_date,
+       c.end_date::text AS end_date
+     FROM cases c
+     LEFT JOIN companies comp ON comp.id = c.company_id
+     LEFT JOIN tasks t ON t.case_id = c.id
+     LEFT JOIN work_hours wh ON wh.task_id = t.id
+     GROUP BY c.id, c.name, comp.name, c.start_date, c.end_date
+     ORDER BY c.end_date DESC NULLS LAST, total_hours DESC, mission_name ASC`,
+  );
+  return result.rows;
+};
+
 const getMissionReportsForMonth = async (monthStr) => {
   const month = normalizeMonthParam(monthStr);
   const monthStart = `${month}-01`;
@@ -96,7 +116,27 @@ const getMissionReportsForMonth = async (monthStr) => {
     params,
   );
 
-  return { month, weekly: weekly.rows, monthly: monthly.rows };
+  const finished = await getAllMissionReports();
+  return { month, weekly: weekly.rows, monthly: monthly.rows, finished };
+};
+
+const getCollaboratorRecapForMonth = async (monthStart) => {
+  const result = await pool.query(
+    `SELECT
+       u.id AS user_id,
+       COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.name)), ''), u.email) AS user_name,
+       u.email AS user_email,
+       u.role AS user_role,
+       COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours
+     FROM work_hours wh
+     JOIN users u ON u.id = wh.user_id
+     WHERE wh.work_date >= $1::date
+       AND wh.work_date < ($1::date + INTERVAL '1 month')
+     GROUP BY u.id, u.first_name, u.name, u.email, u.role
+     ORDER BY total_hours DESC, user_name ASC`,
+    [monthStart],
+  );
+  return result.rows;
 };
 
 const getCollaboratorReportsForMonth = async (monthStr) => {
@@ -152,7 +192,8 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
     params,
   );
 
-  return { month, weekly: weekly.rows, monthly: monthly.rows };
+  const recap = await getCollaboratorRecapForMonth(monthStart);
+  return { month, weekly: weekly.rows, monthly: monthly.rows, recap };
 };
 
 const getTopMissions = async (limit = 10) => {

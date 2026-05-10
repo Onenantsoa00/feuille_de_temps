@@ -3,6 +3,15 @@
     <div class="row items-center justify-between q-mb-md q-col-gutter-sm dash-head">
       <div class="text-h4 gt-page-title dash-title">Tableau de bord</div>
       <div v-if="isAdminLike" class="row q-gutter-xs dash-actions">
+        <q-input
+          v-model="searchQuery"
+          dense
+          outlined
+          debounce="300"
+          placeholder="Rechercher par mission, utilisateur ou rôle"
+          class="col-auto"
+          style="min-width: 220px"
+        />
         <q-btn flat dense color="primary" to="/reports/missions" label="Rapport missions" />
         <q-btn
           flat
@@ -78,14 +87,14 @@
     </q-card>
 
     <q-card
-      v-if="isAdminLike && stats.taskTraces?.length"
+      v-if="isAdminLike && filteredTaskTraces.length"
       class="q-mb-md gt-card gt-enter-up gt-delay-2"
     >
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Traces détaillées des tâches</div>
         <q-list separator>
           <q-item
-            v-for="(trace, idx) in stats.taskTraces"
+            v-for="(trace, idx) in paginatedTaskTraces"
             :key="`trace-${idx}`"
             class="gt-list-item"
           >
@@ -101,17 +110,22 @@
             <q-item-section side>{{ decimalHoursToHHMM(trace.duration_hours) }}</q-item-section>
           </q-item>
         </q-list>
+        <q-pagination
+          v-if="taskTracesPageCount > 1"
+          v-model="taskTracesPage"
+          :max="taskTracesPageCount"
+          max-pages="5"
+          boundary-numbers
+          class="q-mt-sm"
+        />
       </q-card-section>
     </q-card>
 
-    <q-card v-if="isAdminLike && stats.weeklyMissionSummaries?.length" class="q-mb-md gt-card">
+    <q-card v-if="isAdminLike && filteredWeeklyMissionSummaries.length" class="q-mb-md gt-card">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Résumé missions hebdomadaire</div>
         <q-list separator>
-          <q-item
-            v-for="(item, idx) in stats.weeklyMissionSummaries.slice(0, 25)"
-            :key="`wk-${idx}`"
-          >
+          <q-item v-for="(item, idx) in paginatedWeeklyMissionSummaries" :key="`wk-${idx}`">
             <q-item-section>
               <q-item-label>{{ item.mission_name }} — {{ item.company_name }}</q-item-label>
               <q-item-label caption
@@ -122,17 +136,22 @@
             <q-item-section side>{{ decimalHoursToHHMM(item.total_hours) }}</q-item-section>
           </q-item>
         </q-list>
+        <q-pagination
+          v-if="weeklyMissionPageCount > 1"
+          v-model="weeklyMissionPage"
+          :max="weeklyMissionPageCount"
+          max-pages="5"
+          boundary-numbers
+          class="q-mt-sm"
+        />
       </q-card-section>
     </q-card>
 
-    <q-card v-if="isAdminLike && stats.monthlyMissionSummaries?.length" class="q-mb-md gt-card">
+    <q-card v-if="isAdminLike && filteredMonthlyMissionSummaries.length" class="q-mb-md gt-card">
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Résumé missions mensuel</div>
         <q-list separator>
-          <q-item
-            v-for="(item, idx) in stats.monthlyMissionSummaries.slice(0, 25)"
-            :key="`mo-${idx}`"
-          >
+          <q-item v-for="(item, idx) in paginatedMonthlyMissionSummaries" :key="`mo-${idx}`">
             <q-item-section>
               <q-item-label>{{ item.mission_name }} — {{ item.company_name }}</q-item-label>
               <q-item-label caption
@@ -143,6 +162,14 @@
             <q-item-section side>{{ decimalHoursToHHMM(item.total_hours) }}</q-item-section>
           </q-item>
         </q-list>
+        <q-pagination
+          v-if="monthlyMissionPageCount > 1"
+          v-model="monthlyMissionPage"
+          :max="monthlyMissionPageCount"
+          max-pages="5"
+          boundary-numbers
+          class="q-mt-sm"
+        />
       </q-card-section>
     </q-card>
 
@@ -165,7 +192,7 @@
     </q-card>
 
     <q-card
-      v-if="isAdminLike && stats.topMissions?.length"
+      v-if="isAdminLike && filteredTopMissions.length"
       class="q-mb-md gt-card gt-enter-up gt-delay-2"
     >
       <q-card-section>
@@ -180,7 +207,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="m in stats.topMissions" :key="m.mission_id">
+            <tr v-for="m in paginatedTopMissions" :key="m.mission_id">
               <td>{{ m.mission_name }}</td>
               <td>{{ m.company_name }}</td>
               <td>{{ m.participants_count }}</td>
@@ -188,11 +215,19 @@
             </tr>
           </tbody>
         </q-markup-table>
+        <q-pagination
+          v-if="topMissionsPageCount > 1"
+          v-model="topMissionsPage"
+          :max="topMissionsPageCount"
+          max-pages="5"
+          boundary-numbers
+          class="q-mt-sm"
+        />
       </q-card-section>
     </q-card>
 
     <q-card
-      v-if="isAdminLike && stats.topCollaborateurs?.length"
+      v-if="isAdminLike && filteredTopCollaborateurs.length"
       class="q-mb-md gt-card gt-enter-up gt-delay-2"
     >
       <q-card-section>
@@ -207,7 +242,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="u in stats.topCollaborateurs" :key="u.user_id">
+            <tr v-for="u in paginatedTopCollaborateurs" :key="u.user_id">
               <td>{{ u.user_name }}</td>
               <td>{{ u.user_email }}</td>
               <td>{{ u.user_role }}</td>
@@ -215,6 +250,14 @@
             </tr>
           </tbody>
         </q-markup-table>
+        <q-pagination
+          v-if="topCollaborateursPageCount > 1"
+          v-model="topCollaborateursPage"
+          :max="topCollaborateursPageCount"
+          max-pages="5"
+          boundary-numbers
+          class="q-mt-sm"
+        />
       </q-card-section>
     </q-card>
 
@@ -249,7 +292,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api } from 'src/boot/axios'
 import { Line, Bar } from 'vue-chartjs'
 import {
@@ -296,6 +339,133 @@ const stats = ref({
 })
 
 const isAdminLike = computed(() => ['admin', 'expert_comptable'].includes(stats.value.role))
+
+const searchQuery = ref('')
+const pageSize = 10
+const taskTracesPage = ref(1)
+const weeklyMissionPage = ref(1)
+const monthlyMissionPage = ref(1)
+const topMissionsPage = ref(1)
+const topCollaborateursPage = ref(1)
+
+const normalizedSearch = computed(() => searchQuery.value.trim().toLowerCase())
+
+const matchesSearch = (item, keys) => {
+  if (!normalizedSearch.value) return true
+  return keys.some((key) =>
+    String(item[key] || '')
+      .toLowerCase()
+      .includes(normalizedSearch.value),
+  )
+}
+
+const filteredTaskTraces = computed(() =>
+  (stats.value.taskTraces || []).filter((row) =>
+    matchesSearch(row, [
+      'user_name',
+      'user_email',
+      'user_role',
+      'task_name',
+      'mission_name',
+      'company_name',
+    ]),
+  ),
+)
+
+const filteredWeeklyMissionSummaries = computed(() =>
+  (stats.value.weeklyMissionSummaries || []).filter((row) =>
+    matchesSearch(row, ['mission_name', 'company_name']),
+  ),
+)
+
+const filteredMonthlyMissionSummaries = computed(() =>
+  (stats.value.monthlyMissionSummaries || []).filter((row) =>
+    matchesSearch(row, ['mission_name', 'company_name']),
+  ),
+)
+
+const filteredTopMissions = computed(() =>
+  (stats.value.topMissions || []).filter((row) =>
+    matchesSearch(row, ['mission_name', 'company_name']),
+  ),
+)
+
+const filteredTopCollaborateurs = computed(() =>
+  (stats.value.topCollaborateurs || []).filter((row) =>
+    matchesSearch(row, ['user_name', 'user_email', 'user_role']),
+  ),
+)
+
+const taskTracesPageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredTaskTraces.value.length / pageSize)),
+)
+const weeklyMissionPageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredWeeklyMissionSummaries.value.length / pageSize)),
+)
+const monthlyMissionPageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredMonthlyMissionSummaries.value.length / pageSize)),
+)
+const topMissionsPageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredTopMissions.value.length / pageSize)),
+)
+const topCollaborateursPageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredTopCollaborateurs.value.length / pageSize)),
+)
+
+const paginatedTaskTraces = computed(() =>
+  filteredTaskTraces.value.slice(
+    (taskTracesPage.value - 1) * pageSize,
+    taskTracesPage.value * pageSize,
+  ),
+)
+const paginatedWeeklyMissionSummaries = computed(() =>
+  filteredWeeklyMissionSummaries.value.slice(
+    (weeklyMissionPage.value - 1) * pageSize,
+    weeklyMissionPage.value * pageSize,
+  ),
+)
+const paginatedMonthlyMissionSummaries = computed(() =>
+  filteredMonthlyMissionSummaries.value.slice(
+    (monthlyMissionPage.value - 1) * pageSize,
+    monthlyMissionPage.value * pageSize,
+  ),
+)
+const paginatedTopMissions = computed(() =>
+  filteredTopMissions.value.slice(
+    (topMissionsPage.value - 1) * pageSize,
+    topMissionsPage.value * pageSize,
+  ),
+)
+const paginatedTopCollaborateurs = computed(() =>
+  filteredTopCollaborateurs.value.slice(
+    (topCollaborateursPage.value - 1) * pageSize,
+    topCollaborateursPage.value * pageSize,
+  ),
+)
+
+watch(normalizedSearch, () => {
+  taskTracesPage.value = 1
+  weeklyMissionPage.value = 1
+  monthlyMissionPage.value = 1
+  topMissionsPage.value = 1
+  topCollaborateursPage.value = 1
+})
+
+watch(taskTracesPageCount, (count) => {
+  if (taskTracesPage.value > count) taskTracesPage.value = count
+})
+watch(weeklyMissionPageCount, (count) => {
+  if (weeklyMissionPage.value > count) weeklyMissionPage.value = count
+})
+watch(monthlyMissionPageCount, (count) => {
+  if (monthlyMissionPage.value > count) monthlyMissionPage.value = count
+})
+watch(topMissionsPageCount, (count) => {
+  if (topMissionsPage.value > count) topMissionsPage.value = count
+})
+watch(topCollaborateursPageCount, (count) => {
+  if (topCollaborateursPage.value > count) topCollaborateursPage.value = count
+})
 
 const DURATION_CARD_KEYS = new Set(['heures', 'week', 'total'])
 

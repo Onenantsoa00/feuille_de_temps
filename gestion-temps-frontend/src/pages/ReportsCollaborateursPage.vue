@@ -114,83 +114,122 @@
         </q-markup-table>
       </q-card-section>
     </q-card>
+
+    <q-card class="gt-card q-mt-md">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Récapitulation du collaborateur durant le mois</div>
+        <q-markup-table flat bordered wrap-cells class="report-table">
+          <thead>
+            <tr>
+              <th>Collaborateur</th>
+              <th>Email</th>
+              <th>Rôle</th>
+              <th>Total heures</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, i) in recapRows" :key="`r-${i}`">
+              <td>{{ row.user_name }}</td>
+              <td>{{ row.user_email }}</td>
+              <td>{{ row.user_role }}</td>
+              <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
+            </tr>
+            <tr v-if="!recapRows.length">
+              <td colspan="4" class="text-grey-7">Aucune récapitulation pour ce mois.</td>
+            </tr>
+          </tbody>
+        </q-markup-table>
+      </q-card-section>
+    </q-card>
   </q-page>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { api } from "src/boot/axios";
-import { decimalHoursToHHMM } from "src/utils/formatDuration";
+import { ref, computed, onMounted } from 'vue'
+import { api } from 'src/boot/axios'
+import { decimalHoursToHHMM } from 'src/utils/formatDuration'
 
-const month = ref(defaultMonth());
-const weeklyRows = ref([]);
-const monthlyRows = ref([]);
-const selectedUserId = ref(null);
-const selectedMissionId = ref(null);
+const month = ref(defaultMonth())
+const weeklyRows = ref([])
+const monthlyRows = ref([])
+const recapRows = ref([])
+const selectedUserId = ref(null)
+const selectedMissionId = ref(null)
 
 function defaultMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-const monthLabel = computed(() => month.value || "");
+const monthLabel = computed(() => month.value || '')
 const collaboratorOptions = computed(() => {
-  const map = new Map();
+  const map = new Map()
   for (const row of monthlyRows.value) {
-    const key = Number(row.user_id);
+    const key = Number(row.user_id)
     if (!map.has(key)) {
       map.set(key, {
         label: `${row.user_name} (${row.user_email})`,
         value: key,
-      });
+      })
     }
   }
-  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "fr"));
-});
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, 'fr'))
+})
 
 const missionOptions = computed(() => {
-  const map = new Map();
+  const map = new Map()
   for (const row of monthlyRows.value) {
-    const key = Number(row.mission_id || 0);
+    const key = Number(row.mission_id || 0)
     if (!map.has(key)) {
       map.set(key, {
         label: `${row.mission_name} — ${row.company_name}`,
         value: key,
-      });
+      })
     }
   }
-  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "fr"));
-});
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, 'fr'))
+})
 
 const filteredWeeklyRows = computed(() =>
   weeklyRows.value.filter((row) => {
-    if (selectedUserId.value != null && Number(row.user_id) !== Number(selectedUserId.value)) return false;
-    if (selectedMissionId.value != null && Number(row.mission_id || 0) !== Number(selectedMissionId.value)) return false;
-    return true;
-  })
-);
+    if (selectedUserId.value != null && Number(row.user_id) !== Number(selectedUserId.value))
+      return false
+    if (
+      selectedMissionId.value != null &&
+      Number(row.mission_id || 0) !== Number(selectedMissionId.value)
+    )
+      return false
+    return true
+  }),
+)
 
 const filteredMonthlyRows = computed(() =>
   monthlyRows.value.filter((row) => {
-    if (selectedUserId.value != null && Number(row.user_id) !== Number(selectedUserId.value)) return false;
-    if (selectedMissionId.value != null && Number(row.mission_id || 0) !== Number(selectedMissionId.value)) return false;
-    return true;
-  })
-);
+    if (selectedUserId.value != null && Number(row.user_id) !== Number(selectedUserId.value))
+      return false
+    if (
+      selectedMissionId.value != null &&
+      Number(row.mission_id || 0) !== Number(selectedMissionId.value)
+    )
+      return false
+    return true
+  }),
+)
 
 async function load() {
-  const res = await api.get("/dashboard/reports/collaborateurs", {
+  const res = await api.get('/dashboard/reports/collaborateurs', {
     params: { month: month.value },
-  });
-  weeklyRows.value = res.data.weekly || [];
-  monthlyRows.value = res.data.monthly || [];
+  })
+  weeklyRows.value = res.data.weekly || []
+  monthlyRows.value = res.data.monthly || []
+  recapRows.value = res.data.recap || []
 }
 
 function print() {
-  window.print();
+  window.print()
 }
 
-onMounted(load);
+onMounted(load)
 </script>
 
 <style scoped>

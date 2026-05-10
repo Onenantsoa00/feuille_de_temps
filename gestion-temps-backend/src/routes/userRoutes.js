@@ -7,6 +7,7 @@ const {
   getPendingEmployees,
   validateEmployee,
   changePassword,
+  adminChangeUserPassword,
   updateUser,
   getUserMissions,
 } = require("../controllers/userController");
@@ -23,34 +24,47 @@ router.get("/users", verifyToken, getUsers);
 router.post(
   "/users",
   verifyToken,
-  requireRole("admin", "expert_comptable", "secretaire", "chef_de_mission", "chef_mission", "chef"),
+  requireRole(
+    "admin",
+    "expert_comptable",
+    "secretaire",
+    "chef_de_mission",
+    "chef_mission",
+    "chef",
+  ),
   validateCreateUserRole,
-  createUser
+  createUser,
 );
 router.get(
   "/users/pending-employee-validations",
   verifyToken,
   requireRole("admin", "expert_comptable"),
-  getPendingEmployees
+  getPendingEmployees,
 );
 router.put(
   "/users/:id/validate",
   verifyToken,
   requireRole("admin", "expert_comptable"),
-  validateEmployee
+  validateEmployee,
 );
 router.put("/users/change-password", verifyToken, changePassword);
+router.put(
+  "/users/:id/change-password",
+  verifyToken,
+  requireRole("admin", "expert_comptable"),
+  adminChangeUserPassword,
+);
 router.get(
   "/users/:id/missions",
   verifyToken,
   requireRole("admin", "expert_comptable"),
-  getUserMissions
+  getUserMissions,
 );
 router.put(
   "/users/:id",
   verifyToken,
   requireRole("admin", "expert_comptable"),
-  updateUser
+  updateUser,
 );
 
 router.get("/profile", verifyToken, (req, res) => {

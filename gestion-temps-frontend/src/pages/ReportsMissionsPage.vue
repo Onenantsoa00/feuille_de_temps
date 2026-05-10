@@ -74,38 +74,73 @@
         </q-markup-table>
       </q-card-section>
     </q-card>
+
+    <q-card class="gt-card q-mt-md">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">
+          Depuis le début de mission jusqu'à la fin (toutes missions)
+        </div>
+        <q-markup-table flat bordered wrap-cells class="report-table">
+          <thead>
+            <tr>
+              <th>Mission</th>
+              <th>Société</th>
+              <th>Participants</th>
+              <th>Total heures</th>
+              <th>Date début</th>
+              <th>Finie le</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, i) in missionRows" :key="`f-${i}`">
+              <td>{{ row.mission_name }}</td>
+              <td>{{ row.company_name }}</td>
+              <td>{{ row.participants_count }}</td>
+              <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
+              <td>{{ row.start_date || '—' }}</td>
+              <td>{{ row.end_date || '—' }}</td>
+            </tr>
+            <tr v-if="!missionRows.length">
+              <td colspan="6" class="text-grey-7">Aucune mission.</td>
+            </tr>
+          </tbody>
+        </q-markup-table>
+      </q-card-section>
+    </q-card>
   </q-page>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { api } from "src/boot/axios";
-import { decimalHoursToHHMM } from "src/utils/formatDuration";
+import { ref, computed, onMounted } from 'vue'
+import { api } from 'src/boot/axios'
+import { decimalHoursToHHMM } from 'src/utils/formatDuration'
 
-const month = ref(defaultMonth());
-const weeklyRows = ref([]);
-const monthlyRows = ref([]);
+const month = ref(defaultMonth())
+const weeklyRows = ref([])
+const monthlyRows = ref([])
+const missionRows = ref([])
 
 function defaultMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-const monthLabel = computed(() => month.value || "");
+const monthLabel = computed(() => month.value || '')
 
 async function load() {
-  const res = await api.get("/dashboard/reports/missions", {
+  const res = await api.get('/dashboard/reports/missions', {
     params: { month: month.value },
-  });
-  weeklyRows.value = res.data.weekly || [];
-  monthlyRows.value = res.data.monthly || [];
+  })
+  weeklyRows.value = res.data.weekly || []
+  monthlyRows.value = res.data.monthly || []
+  missionRows.value = res.data.finished || []
 }
 
 function print() {
-  window.print();
+  window.print()
 }
 
-onMounted(load);
+onMounted(load)
 </script>
 
 <style scoped>
