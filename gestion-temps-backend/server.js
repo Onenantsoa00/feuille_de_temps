@@ -26,14 +26,17 @@ const getPreviousBusinessDay = (referenceDate = new Date()) => {
   return d;
 };
 
-const isMorningRunWindow = (d = new Date()) => d.getHours() >= 6 && d.getHours() < 12;
+const isMorningRunWindow = (d = new Date()) =>
+  d.getHours() >= 6 && d.getHours() < 12;
 
 async function runMissingTimesheetReminder(io) {
   const now = new Date();
   if (!isMorningRunWindow(now)) return;
   const targetDate = getPreviousBusinessDay(now);
   const workDate = toIsoDate(targetDate);
-  const inserted = await notificationModel.notifyMissingTimesheetForDate({ workDate });
+  const inserted = await notificationModel.notifyMissingTimesheetForDate({
+    workDate,
+  });
   for (const row of inserted) {
     io.to(`user_${row.user_id}`).emit("newNotification", row);
     const count = await notificationModel.countUnread(row.user_id);
@@ -58,6 +61,16 @@ function scheduleDailyReminder(io) {
 }
 
 async function start() {
+  try {
+    // Test DB connection
+    const pool = require("./src/config/db");
+    await pool.query("SELECT 1");
+    console.log("✅ DB connected");
+  } catch (e) {
+    console.error("❌ DB connection failed:", e.message);
+    process.exit(1);
+  }
+
   try {
     await seedAdmin();
   } catch (e) {

@@ -22,7 +22,11 @@
           map-options
           clearable
           label="Mission (recommandé)"
-          :hint="cases.length ? 'Affiche les missions autorisées pour votre compte' : 'Aucune mission disponible pour votre compte'"
+          :hint="
+            cases.length
+              ? 'Affiche les missions autorisées pour votre compte'
+              : 'Aucune mission disponible pour votre compte'
+          "
         />
 
         <q-input
@@ -54,9 +58,7 @@
             :disable="!timerRunning"
             @click="stopTimer"
           />
-          <div v-if="timerRunning" class="text-caption self-center">
-            Minuteur en cours...
-          </div>
+          <div v-if="timerRunning" class="text-caption self-center">Minuteur en cours...</div>
         </div>
       </q-card-section>
 
@@ -71,7 +73,11 @@
         <div class="text-subtitle1">Historique</div>
 
         <q-list separator>
-          <q-item v-for="item in workHours" :key="item.work_hour_id" class="gt-list-item work-hour-item">
+          <q-item
+            v-for="item in workHours"
+            :key="item.work_hour_id"
+            class="gt-list-item work-hour-item"
+          >
             <q-item-section>
               {{ lineLabel(item) }}
             </q-item-section>
@@ -102,6 +108,7 @@ import { api } from 'src/boot/axios'
 import { useAuthStore } from 'src/stores/auth'
 import { addWorkHourLocal, getWorkHoursLocal, clearWorkHoursLocal } from 'src/services/db'
 import { clockRangeToDurationHHMM } from 'src/utils/formatDuration'
+import { notifyApiError } from 'src/utils/apiError'
 
 const authStore = useAuthStore()
 
@@ -178,13 +185,37 @@ const addWorkHour = async () => {
       })
       return
     }
+    if (!form.value.work_date) {
+      Notify.create({ type: 'warning', message: 'Sélectionnez une date' })
+      return
+    }
+    if (!form.value.start_time) {
+      Notify.create({ type: 'warning', message: "Indiquez l'heure de début" })
+      return
+    }
+    if (!form.value.end_time) {
+      Notify.create({
+        type: 'warning',
+        message: "Indiquez l'heure de fin ou arrêtez le minuteur",
+      })
+      return
+    }
+    if (form.value.end_time <= form.value.start_time) {
+      Notify.create({
+        type: 'warning',
+        message: "L'heure de fin doit être après l'heure de début",
+      })
+      return
+    }
 
     let taskId = null
     const taskName = form.value.task_name?.trim() || ''
     if (taskName) {
       const existing = tasks.value.find((t) => {
         const same =
-          String(t.name || '').trim().toLowerCase() === taskName.toLowerCase()
+          String(t.name || '')
+            .trim()
+            .toLowerCase() === taskName.toLowerCase()
         if (!same) return false
         if (!form.value.case_id) return true
         return Number(t.case_id) === Number(form.value.case_id)
@@ -254,6 +285,7 @@ const addWorkHour = async () => {
     loadWorkHours() // 🔥 IMPORTANT
   } catch (error) {
     console.error(error)
+    notifyApiError(error, "Impossible d'ajouter la feuille de temps.")
   }
 }
 
@@ -274,6 +306,7 @@ const deleteWorkHour = async (id) => {
     loadWorkHours()
   } catch (error) {
     console.error(error)
+    notifyApiError(error, 'Impossible de supprimer cette feuille de temps.')
   }
 }
 
@@ -302,6 +335,7 @@ const syncOfflineData = async () => {
     loadWorkHours() // 🔥 IMPORTANT
   } catch (error) {
     console.error('SYNC ERROR', error)
+    notifyApiError(error, 'Impossible de synchroniser les données hors ligne.')
   }
 }
 

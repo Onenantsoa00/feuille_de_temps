@@ -4,13 +4,7 @@
 
     <q-card v-if="auth.canManageCompanies" class="q-mb-md gt-card gt-enter-up">
       <q-card-section class="row q-col-gutter-md">
-        <q-input
-          v-model="newName"
-          class="col-12 col-md-8"
-          label="Nom"
-          outlined
-          dense
-        />
+        <q-input v-model="newName" class="col-12 col-md-8" label="Nom" outlined dense />
         <q-input
           v-model="newDescription"
           class="col-12 col-md-4"
@@ -18,20 +12,8 @@
           outlined
           dense
         />
-        <q-input
-          v-model="newAddress"
-          class="col-12 col-md-6"
-          label="Adresse"
-          outlined
-          dense
-        />
-        <q-input
-          v-model="newContact"
-          class="col-12 col-md-6"
-          label="Contact"
-          outlined
-          dense
-        />
+        <q-input v-model="newAddress" class="col-12 col-md-6" label="Adresse" outlined dense />
+        <q-input v-model="newContact" class="col-12 col-md-6" label="Contact" outlined dense />
         <div class="col-12 col-md-4 flex items-end">
           <q-btn
             color="primary"
@@ -52,15 +34,27 @@
             <q-item-section>
               <template v-if="editingId === c.id">
                 <q-input v-model="editName" dense outlined class="q-mb-xs" />
-                <q-input v-model="editDescription" dense outlined class="q-mb-xs" label="Description" />
+                <q-input
+                  v-model="editDescription"
+                  dense
+                  outlined
+                  class="q-mb-xs"
+                  label="Description"
+                />
                 <q-input v-model="editAddress" dense outlined class="q-mb-xs" label="Adresse" />
                 <q-input v-model="editContact" dense outlined label="Contact" />
               </template>
               <template v-else>
                 <div class="text-subtitle2">{{ c.name }}</div>
-                <div class="text-caption text-grey-7">{{ c.description || "Sans description" }}</div>
-                <div class="text-caption text-grey-7">{{ c.address || "Adresse non renseignée" }}</div>
-                <div class="text-caption text-grey-7">{{ c.contact || "Contact non renseigné" }}</div>
+                <div class="text-caption text-grey-7">
+                  {{ c.description || 'Sans description' }}
+                </div>
+                <div class="text-caption text-grey-7">
+                  {{ c.address || 'Adresse non renseignée' }}
+                </div>
+                <div class="text-caption text-grey-7">
+                  {{ c.contact || 'Contact non renseigné' }}
+                </div>
               </template>
             </q-item-section>
             <q-item-section v-if="auth.canManageCompanies" side>
@@ -81,65 +75,63 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
-import { Notify } from "quasar";
-import { api } from "src/boot/axios";
-import { useAuthStore } from "src/stores/auth";
+import { ref, onMounted } from 'vue'
+import { Notify } from 'quasar'
+import { api } from 'src/boot/axios'
+import { useAuthStore } from 'src/stores/auth'
+import { notifyApiError } from 'src/utils/apiError'
 
-const auth = useAuthStore();
-const companies = ref([]);
-const newName = ref("");
-const newDescription = ref("");
-const newAddress = ref("");
-const newContact = ref("");
-const editingId = ref(null);
-const editName = ref("");
-const editDescription = ref("");
-const editAddress = ref("");
-const editContact = ref("");
+const auth = useAuthStore()
+const companies = ref([])
+const newName = ref('')
+const newDescription = ref('')
+const newAddress = ref('')
+const newContact = ref('')
+const editingId = ref(null)
+const editName = ref('')
+const editDescription = ref('')
+const editAddress = ref('')
+const editContact = ref('')
 
 const load = async () => {
-  const res = await api.get("/companies");
-  companies.value = res.data;
-};
+  const res = await api.get('/companies')
+  companies.value = res.data
+}
 
 const addCompany = async () => {
   if (!newName.value?.trim()) {
-    Notify.create({ type: "warning", message: "Nom requis" });
-    return;
+    Notify.create({ type: 'warning', message: 'Nom requis' })
+    return
   }
   try {
-    await api.post("/companies", {
+    await api.post('/companies', {
       name: newName.value.trim(),
       description: newDescription.value?.trim() || null,
       address: newAddress.value?.trim() || null,
       contact: newContact.value?.trim() || null,
-    });
-    newName.value = "";
-    newDescription.value = "";
-    newAddress.value = "";
-    newContact.value = "";
-    await load();
-    Notify.create({ type: "positive", message: "Société ajoutée" });
+    })
+    newName.value = ''
+    newDescription.value = ''
+    newAddress.value = ''
+    newContact.value = ''
+    await load()
+    Notify.create({ type: 'positive', message: 'Société ajoutée' })
   } catch (e) {
-    Notify.create({
-      type: "negative",
-      message: e.response?.data?.message ?? "Erreur",
-    });
+    notifyApiError(e, "Impossible d'ajouter la société.")
   }
-};
+}
 
 const startEdit = (c) => {
-  editingId.value = c.id;
-  editName.value = c.name;
-  editDescription.value = c.description || "";
-  editAddress.value = c.address || "";
-  editContact.value = c.contact || "";
-};
+  editingId.value = c.id
+  editName.value = c.name
+  editDescription.value = c.description || ''
+  editAddress.value = c.address || ''
+  editContact.value = c.contact || ''
+}
 
 const cancelEdit = () => {
-  editingId.value = null;
-};
+  editingId.value = null
+}
 
 const saveEdit = async (id) => {
   try {
@@ -148,32 +140,37 @@ const saveEdit = async (id) => {
       description: editDescription.value?.trim() || null,
       address: editAddress.value?.trim() || null,
       contact: editContact.value?.trim() || null,
-    });
-    editingId.value = null;
-    await load();
-    Notify.create({ type: "positive", message: "Mis à jour" });
-  } catch {
-    Notify.create({ type: "negative", message: "Erreur" });
+    })
+    editingId.value = null
+    await load()
+    Notify.create({ type: 'positive', message: 'Mis à jour' })
+  } catch (e) {
+    notifyApiError(e, 'Impossible de mettre à jour la société.')
   }
-};
+}
 
 const remove = async (id) => {
   try {
-    await api.delete(`/companies/${id}`);
-    await load();
-    Notify.create({ type: "positive", message: "Supprimé" });
-  } catch {
-    Notify.create({ type: "negative", message: "Erreur (liens existants ?)" });
+    await api.delete(`/companies/${id}`)
+    await load()
+    Notify.create({ type: 'positive', message: 'Supprimé' })
+  } catch (e) {
+    notifyApiError(
+      e,
+      'Impossible de supprimer la société. Vérifiez si elle est liée à des éléments existants.',
+    )
   }
-};
+}
 
-onMounted(load);
+onMounted(load)
 </script>
 
 <style scoped>
 .action-btn {
   border-radius: 12px;
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease;
 }
 
 .action-btn:hover {

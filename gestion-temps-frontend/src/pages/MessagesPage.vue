@@ -102,10 +102,10 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
-import { Notify } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useAuthStore } from 'src/stores/auth'
 import { socket } from 'src/boot/socket'
+import { notifyApiError } from 'src/utils/apiError'
 
 const auth = useAuthStore()
 const meId = computed(() => auth.user?.id)
@@ -208,10 +208,7 @@ const send = async () => {
       socket.emit('stopTyping', { fromUserId: meId.value, toUserId: to })
     }
   } catch (e) {
-    Notify.create({
-      type: 'negative',
-      message: e.response?.data?.message ?? 'Erreur',
-    })
+    notifyApiError(e, "Impossible d'envoyer le message.")
   }
 }
 

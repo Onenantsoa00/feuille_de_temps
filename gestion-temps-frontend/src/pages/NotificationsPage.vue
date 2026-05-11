@@ -56,6 +56,7 @@ import { api } from 'src/boot/axios'
 import { useAuthStore } from 'src/stores/auth'
 import { socket } from 'src/boot/socket'
 import { dayjs } from 'src/boot/dayjs'
+import { notifyApiError } from 'src/utils/apiError'
 
 const auth = useAuthStore()
 const items = ref([])
@@ -128,6 +129,19 @@ const markAll = async () => {
 }
 
 const sendNotif = async () => {
+  if (!sendForm.value.user_id) {
+    Notify.create({ type: 'warning', message: 'Sélectionnez un destinataire' })
+    return
+  }
+  if (!sendForm.value.title?.trim()) {
+    Notify.create({ type: 'warning', message: 'Titre requis' })
+    return
+  }
+  if (!sendForm.value.body?.trim()) {
+    Notify.create({ type: 'warning', message: 'Message requis' })
+    return
+  }
+
   try {
     await api.post('/notifications', {
       user_id: sendForm.value.user_id,
@@ -137,10 +151,7 @@ const sendNotif = async () => {
     sendForm.value = { user_id: null, title: '', body: '' }
     Notify.create({ type: 'positive', message: 'Notification envoyée' })
   } catch (e) {
-    Notify.create({
-      type: 'negative',
-      message: e.response?.data?.message ?? 'Erreur',
-    })
+    notifyApiError(e, "Impossible d'envoyer la notification.")
   }
 }
 

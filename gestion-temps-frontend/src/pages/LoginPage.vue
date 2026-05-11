@@ -48,7 +48,9 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { Notify } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
+import { extractApiErrorMessage } from 'src/utils/apiError'
 
 const email = ref('')
 const password = ref('')
@@ -58,12 +60,27 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const handleLogin = async () => {
+  if (!email.value?.trim()) {
+    Notify.create({ type: 'warning', message: 'Email requis' })
+    return
+  }
+  if (!password.value) {
+    Notify.create({ type: 'warning', message: 'Mot de passe requis' })
+    return
+  }
+
   try {
     await authStore.login(email.value, password.value)
     router.push('/dashboard')
   } catch (error) {
     console.error(error)
-    alert('Erreur login')
+    Notify.create({
+      type: 'negative',
+      message: extractApiErrorMessage(
+        error,
+        'Impossible de se connecter. Vérifiez vos identifiants.',
+      ),
+    })
   }
 }
 </script>

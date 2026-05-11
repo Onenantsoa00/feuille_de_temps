@@ -220,6 +220,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Notify } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useAuthStore } from 'src/stores/auth'
+import { notifyApiError } from 'src/utils/apiError'
 
 const auth = useAuthStore()
 
@@ -278,6 +279,8 @@ const form = ref({
   company_id: null,
 })
 
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim())
+
 const load = async () => {
   try {
     const [u, c] = await Promise.all([api.get('/users'), api.get('/companies')])
@@ -298,6 +301,26 @@ const load = async () => {
 }
 
 const create = async () => {
+  if (!form.value.email?.trim()) {
+    Notify.create({ type: 'warning', message: 'Email requis' })
+    return
+  }
+  if (!isValidEmail(form.value.email)) {
+    Notify.create({ type: 'warning', message: 'Email invalide' })
+    return
+  }
+  if (!form.value.password?.trim()) {
+    Notify.create({ type: 'warning', message: 'Mot de passe requis' })
+    return
+  }
+  if (form.value.password.length < 6) {
+    Notify.create({
+      type: 'warning',
+      message: 'Le mot de passe doit contenir au moins 6 caractères.',
+    })
+    return
+  }
+
   try {
     const response = await api.post('/users', {
       first_name: form.value.first_name || null,
@@ -322,10 +345,7 @@ const create = async () => {
         response.data?.message ?? "Utilisateur créé (vérifiez l'état de l'envoi d'invitation)",
     })
   } catch (e) {
-    Notify.create({
-      type: 'negative',
-      message: e.response?.data?.message ?? 'Erreur',
-    })
+    notifyApiError(e, "Impossible de créer l'utilisateur.")
   }
 }
 
@@ -382,14 +402,20 @@ const savePasswordChange = async () => {
     resetPasswordChangeForm()
     Notify.create({ type: 'positive', message: 'Mot de passe modifié' })
   } catch (e) {
-    Notify.create({
-      type: 'negative',
-      message: e.response?.data?.message ?? 'Erreur modification mot de passe',
-    })
+    notifyApiError(e, 'Impossible de modifier le mot de passe.')
   }
 }
 
 const saveEdit = async () => {
+  if (!editForm.value.email?.trim()) {
+    Notify.create({ type: 'warning', message: 'Email requis' })
+    return
+  }
+  if (!isValidEmail(editForm.value.email)) {
+    Notify.create({ type: 'warning', message: 'Email invalide' })
+    return
+  }
+
   try {
     await api.put(`/users/${editForm.value.id}`, {
       first_name: editForm.value.first_name || null,
@@ -402,10 +428,7 @@ const saveEdit = async () => {
     await load()
     Notify.create({ type: 'positive', message: 'Utilisateur modifié' })
   } catch (e) {
-    Notify.create({
-      type: 'negative',
-      message: e.response?.data?.message ?? 'Erreur modification utilisateur',
-    })
+    notifyApiError(e, 'Impossible de modifier cet utilisateur.')
   }
 }
 

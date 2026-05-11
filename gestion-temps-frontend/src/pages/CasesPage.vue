@@ -55,13 +55,7 @@
           class="action-btn"
           @click="saveCase"
         />
-        <q-btn
-          v-if="editingCaseId"
-          flat
-          color="grey-8"
-          label="Annuler"
-          @click="resetForm"
-        />
+        <q-btn v-if="editingCaseId" flat color="grey-8" label="Annuler" @click="resetForm" />
       </q-card-actions>
     </q-card>
 
@@ -183,6 +177,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Notify } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useAuthStore } from 'src/stores/auth'
+import { notifyApiError } from 'src/utils/apiError'
 
 const auth = useAuthStore()
 
@@ -205,20 +200,18 @@ const assignCase = ref(null)
 const assignSelected = ref([])
 
 const chefs = computed(() =>
-  users.value.filter((u) =>
-    ['chef', 'chef_mission', 'chef_de_mission'].includes(u.role)
-  )
+  users.value.filter((u) => ['chef', 'chef_mission', 'chef_de_mission'].includes(u.role)),
 )
 
 const employees = computed(() =>
-  users.value.filter((u) => ['employe', 'collaborateur'].includes(u.role))
+  users.value.filter((u) => ['employe', 'collaborateur'].includes(u.role)),
 )
 const chefMissions = computed(() =>
   cases.value.filter((c) => {
     if (c.user_id === auth.user?.id) return true
     const assignedChefs = Array.isArray(c.assigned_chefs) ? c.assigned_chefs : []
     return assignedChefs.some((u) => u.id === auth.user?.id)
-  })
+  }),
 )
 const missionCards = computed(() => (auth.isAdmin ? cases.value : chefMissions.value))
 
@@ -281,10 +274,7 @@ const loadData = async () => {
     }
   } catch (e) {
     console.error(e)
-    Notify.create({
-      type: 'negative',
-      message: 'Impossible de charger les missions',
-    })
+    notifyApiError(e, 'Impossible de charger les missions.')
   }
 }
 
@@ -294,10 +284,7 @@ const validateCase = async (id) => {
     Notify.create({ type: 'positive', message: 'Mission validée' })
     await loadData()
   } catch (e) {
-    Notify.create({
-      type: 'negative',
-      message: e.response?.data?.message ?? 'Erreur de validation',
-    })
+    notifyApiError(e, 'Impossible de valider la mission.')
   }
 }
 
@@ -307,10 +294,7 @@ const finishCase = async (id) => {
     Notify.create({ type: 'positive', message: 'Mission terminée' })
     await loadData()
   } catch (e) {
-    Notify.create({
-      type: 'negative',
-      message: e.response?.data?.message ?? 'Erreur fin de mission',
-    })
+    notifyApiError(e, 'Impossible de terminer la mission.')
   }
 }
 
@@ -342,8 +326,24 @@ const saveCase = async () => {
     Notify.create({ type: 'warning', message: 'Indiquez un nom de mission' })
     return
   }
+  if (!company_id.value) {
+    Notify.create({ type: 'warning', message: 'Sélectionnez une société' })
+    return
+  }
   if (!chef_ids.value.length) {
     Notify.create({ type: 'warning', message: 'Sélectionnez au moins un chef de mission' })
+    return
+  }
+  if (!start_date.value) {
+    Notify.create({ type: 'warning', message: 'Indiquez la date de début' })
+    return
+  }
+  if (!endDateIndefinite.value && !end_date.value) {
+    Notify.create({ type: 'warning', message: 'Indiquez la date de fin ou cochez indéfinie' })
+    return
+  }
+  if (end_date.value && start_date.value && end_date.value < start_date.value) {
+    Notify.create({ type: 'warning', message: 'La date de fin doit être après la date de début' })
     return
   }
   try {
@@ -355,7 +355,7 @@ const saveCase = async () => {
       chef_ids: chef_ids.value,
       description: description.value,
       start_date: start_date.value,
-      end_date: endDateIndefinite.value ? null : (end_date.value || null),
+      end_date: endDateIndefinite.value ? null : end_date.value || null,
     }
     if (isEditing) {
       await api.put(`/cases/${editingCaseId.value}`, payload)
@@ -375,10 +375,7 @@ const saveCase = async () => {
     })
   } catch (e) {
     console.error(e)
-    Notify.create({
-      type: 'negative',
-      message: e.response?.data?.message ?? 'Erreur à la création',
-    })
+    notifyApiError(e, "Impossible d'enregistrer la mission.")
   }
 }
 
@@ -402,10 +399,7 @@ const saveAssign = async () => {
     Notify.create({ type: 'positive', message: 'Assignation enregistrée' })
     await loadData()
   } catch (e) {
-    Notify.create({
-      type: 'negative',
-      message: e.response?.data?.message ?? 'Erreur',
-    })
+    notifyApiError(e, "Impossible d'enregistrer les assignations.")
   }
 }
 
