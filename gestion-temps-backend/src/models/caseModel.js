@@ -29,6 +29,7 @@ const caseSelect = `
              FROM case_assignments ca
              JOIN users manager ON manager.id = ca.user_id
              WHERE ca.case_id = c.id
+               AND (ca.assignment_type = 'chef' OR ca.assignment_type IS NULL)
                AND manager.role IN ('chef', 'chef_mission', 'chef_de_mission')
            ), '[]'::json) AS assigned_chefs,
            COALESCE((
@@ -45,7 +46,8 @@ const caseSelect = `
              FROM case_assignments ca
              JOIN users assignee ON assignee.id = ca.user_id
              WHERE ca.case_id = c.id
-               AND assignee.role IN ('employe', 'collaborateur')
+               AND (ca.assignment_type = 'collaborateur' OR ca.assignment_type IS NULL)
+               AND assignee.role IN ('employe', 'collaborateur', 'chef_de_mission')
            ), '[]'::json) AS assigned_collaborators
     FROM cases c
     LEFT JOIN companies ON c.company_id = companies.id
@@ -96,6 +98,7 @@ const createCase = async (payload) => {
     company_id,
     chef_id,
     chef_ids = [],
+    collaborator_ids = [],
     start_date = null,
     end_date = null,
     created_by = null,
@@ -103,7 +106,20 @@ const createCase = async (payload) => {
   } = payload;
 
   const primaryChefId = Number(chef_id ?? chef_ids?.[0] ?? null);
-  const managerIds = [...new Set((Array.isArray(chef_ids) ? chef_ids : [chef_id]).filter(Boolean).map(Number))];
+  const managerIds = [
+    ...new Set(
+      (Array.isArray(chef_ids) ? chef_ids : [chef_id])
+        .filter(Boolean)
+        .map(Number),
+    ),
+  ];
+  const collaboratorIds = [
+    ...new Set(
+      (Array.isArray(collaborator_ids) ? collaborator_ids : [])
+        .filter(Boolean)
+        .map(Number),
+    ),
+  ];
 
   const client = await pool.connect();
   try {
@@ -128,9 +144,16 @@ const createCase = async (payload) => {
     const secondaryManagers = managerIds.filter((id) => id !== primaryChefId);
     for (const managerId of secondaryManagers) {
       await client.query(
-        `INSERT INTO case_assignments (case_id, user_id) VALUES ($1, $2)
+        `INSERT INTO case_assignments (case_id, user_id, assignment_type) VALUES ($1, $2, 'chef')
          ON CONFLICT DO NOTHING`,
         [createdCase.id, managerId],
+      );
+    }
+    for (const collaboratorId of collaboratorIds) {
+      await client.query(
+        `INSERT INTO case_assignments (case_id, user_id, assignment_type) VALUES ($1, $2, 'collaborateur')
+         ON CONFLICT DO NOTHING`,
+        [createdCase.id, collaboratorId],
       );
     }
     await client.query("COMMIT");
@@ -150,11 +173,25 @@ const updateCase = async (id, payload) => {
     company_id,
     chef_id,
     chef_ids = [],
+    collaborator_ids = [],
     start_date = null,
     end_date = null,
   } = payload;
   const primaryChefId = Number(chef_id ?? chef_ids?.[0] ?? null);
-  const managerIds = [...new Set((Array.isArray(chef_ids) ? chef_ids : [chef_id]).filter(Boolean).map(Number))];
+  const managerIds = [
+    ...new Set(
+      (Array.isArray(chef_ids) ? chef_ids : [chef_id])
+        .filter(Boolean)
+        .map(Number),
+    ),
+  ];
+  const collaboratorIds = [
+    ...new Set(
+      (Array.isArray(collaborator_ids) ? collaborator_ids : [])
+        .filter(Boolean)
+        .map(Number),
+    ),
+  ];
 
   const client = await pool.connect();
   try {
@@ -186,12 +223,28 @@ const updateCase = async (id, payload) => {
       [id],
     );
 
-    const secondaryManagers = managerIds.filter((managerId) => managerId !== primaryChefId);
+    await client.query(
+      `DELETE FROM case_assignments
+       WHERE case_id = $1
+         AND assignment_type = 'collaborateur'`,
+      [id],
+    );
+
+    const secondaryManagers = managerIds.filter(
+      (managerId) => managerId !== primaryChefId,
+    );
     for (const managerId of secondaryManagers) {
       await client.query(
-        `INSERT INTO case_assignments (case_id, user_id) VALUES ($1, $2)
+        `INSERT INTO case_assignments (case_id, user_id, assignment_type) VALUES ($1, $2, 'chef')
          ON CONFLICT DO NOTHING`,
         [id, managerId],
+      );
+    }
+    for (const collaboratorId of collaboratorIds) {
+      await client.query(
+        `INSERT INTO case_assignments (case_id, user_id, assignment_type) VALUES ($1, $2, 'collaborateur')
+         ON CONFLICT DO NOTHING`,
+        [id, collaboratorId],
       );
     }
 
@@ -219,7 +272,7 @@ const replaceAssignments = async (caseId, userIds) => {
     ]);
     for (const uid of userIds) {
       await client.query(
-        `INSERT INTO case_assignments (case_id, user_id) VALUES ($1, $2)
+        `INSERT INTO case_assignments (case_id, user_id, assignment_type) VALUES ($1, $2, 'collaborateur')
          ON CONFLICT DO NOTHING`,
         [caseId, uid],
       );
@@ -277,9 +330,8 @@ const getPendingCases = async () => {
   const result = await pool.query(
     `${caseSelect}
      WHERE COALESCE(c.status, $2) = $1
-     ORDER BY c.id DESC`
-    ,
-    [CASE_STATUS.PENDING, CASE_STATUS.VALIDATED]
+     ORDER BY c.id DESC`,
+    [CASE_STATUS.PENDING, CASE_STATUS.VALIDATED],
   );
   return result.rows;
 };
@@ -293,7 +345,7 @@ const validateCase = async (id, adminId) => {
      WHERE id = $1
        AND COALESCE(status, $2) = $4
      RETURNING *`,
-    [id, CASE_STATUS.VALIDATED, adminId, CASE_STATUS.PENDING]
+    [id, CASE_STATUS.VALIDATED, adminId, CASE_STATUS.PENDING],
   );
   return result.rows[0] || null;
 };
@@ -307,7 +359,7 @@ const finishCase = async (id, adminId) => {
      WHERE id = $1
        AND status = $4
      RETURNING *`,
-    [id, CASE_STATUS.FINISHED, adminId, CASE_STATUS.VALIDATED]
+    [id, CASE_STATUS.FINISHED, adminId, CASE_STATUS.VALIDATED],
   );
   return result.rows[0] || null;
 };

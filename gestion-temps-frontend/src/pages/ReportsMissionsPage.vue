@@ -28,19 +28,25 @@
               <th>Semaine (début)</th>
               <th>Mission</th>
               <th>Société</th>
-              <th>Participants</th>
-              <th>Total heures</th>
+              <th @click="sortWeekly('participants_count')" class="sortable-header">
+                Participants
+                <q-icon :name="sortIcon(weeklySort, 'participants_count')" size="16px" />
+              </th>
+              <th @click="sortWeekly('total_hours')" class="sortable-header">
+                Total heures
+                <q-icon :name="sortIcon(weeklySort, 'total_hours')" size="16px" />
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in weeklyRows" :key="`w-${i}`">
+            <tr v-for="(row, i) in sortedWeeklyRows" :key="`w-${i}`">
               <td>{{ row.period_start }}</td>
               <td>{{ row.mission_name }}</td>
               <td>{{ row.company_name }}</td>
               <td>{{ row.participants_count }}</td>
               <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
             </tr>
-            <tr v-if="!weeklyRows.length">
+            <tr v-if="!sortedWeeklyRows.length">
               <td colspan="5" class="text-grey-7">Aucune donnée pour ce mois.</td>
             </tr>
           </tbody>
@@ -56,18 +62,24 @@
             <tr>
               <th>Mission</th>
               <th>Société</th>
-              <th>Participants</th>
-              <th>Total heures</th>
+              <th @click="sortMonthly('participants_count')" class="sortable-header">
+                Participants
+                <q-icon :name="sortIcon(monthlySort, 'participants_count')" size="16px" />
+              </th>
+              <th @click="sortMonthly('total_hours')" class="sortable-header">
+                Total heures
+                <q-icon :name="sortIcon(monthlySort, 'total_hours')" size="16px" />
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in monthlyRows" :key="`m-${i}`">
+            <tr v-for="(row, i) in sortedMonthlyRows" :key="`m-${i}`">
               <td>{{ row.mission_name }}</td>
               <td>{{ row.company_name }}</td>
               <td>{{ row.participants_count }}</td>
               <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
             </tr>
-            <tr v-if="!monthlyRows.length">
+            <tr v-if="!sortedMonthlyRows.length">
               <td colspan="4" class="text-grey-7">Aucune donnée pour ce mois.</td>
             </tr>
           </tbody>
@@ -126,6 +138,52 @@ function defaultMonth() {
 }
 
 const monthLabel = computed(() => month.value || '')
+const weeklySort = ref({ field: 'period_start', direction: 'asc' })
+const monthlySort = ref({ field: 'participants_count', direction: 'desc' })
+
+const sortIcon = (sortState, field) => {
+  if (sortState.field !== field) return 'arrow_drop_up'
+  return sortState.direction === 'asc' ? 'arrow_drop_up' : 'arrow_drop_down'
+}
+
+const sortRows = (rows, sortState) => {
+  return [...rows].sort((a, b) => {
+    const aValue = a[sortState.field]
+    const bValue = b[sortState.field]
+
+    if (['participants_count', 'total_hours'].includes(sortState.field)) {
+      return sortState.direction === 'asc'
+        ? Number(aValue) - Number(bValue)
+        : Number(bValue) - Number(aValue)
+    }
+    const aText = String(aValue || '').toLowerCase()
+    const bText = String(bValue || '').toLowerCase()
+    if (aText < bText) return sortState.direction === 'asc' ? -1 : 1
+    if (aText > bText) return sortState.direction === 'asc' ? 1 : -1
+    return 0
+  })
+}
+
+const sortedWeeklyRows = computed(() => sortRows(weeklyRows.value, weeklySort.value))
+const sortedMonthlyRows = computed(() => sortRows(monthlyRows.value, monthlySort.value))
+
+const sortWeekly = (field) => {
+  if (weeklySort.value.field === field) {
+    weeklySort.value.direction = weeklySort.value.direction === 'asc' ? 'desc' : 'asc'
+  } else {
+    weeklySort.value.field = field
+    weeklySort.value.direction = 'asc'
+  }
+}
+
+const sortMonthly = (field) => {
+  if (monthlySort.value.field === field) {
+    monthlySort.value.direction = monthlySort.value.direction === 'asc' ? 'desc' : 'asc'
+  } else {
+    monthlySort.value.field = field
+    monthlySort.value.direction = 'asc'
+  }
+}
 
 async function load() {
   const res = await api.get('/dashboard/reports/missions', {

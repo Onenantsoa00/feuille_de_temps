@@ -153,6 +153,7 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
        u.role AS user_role,
        COALESCE(c.id, 0) AS mission_id,
        COALESCE(c.name, '(sans mission)') AS mission_name,
+       COALESCE(t.name, '(sans tâche)') AS task_name,
        COALESCE(comp.name, '—') AS company_name,
        COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours,
        COUNT(*)::int AS entries_count
@@ -163,8 +164,8 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
      LEFT JOIN companies comp ON comp.id = c.company_id
      WHERE wh.work_date >= $1::date
        AND wh.work_date < ($1::date + INTERVAL '1 month')
-     GROUP BY DATE_TRUNC('week', wh.work_date), u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, comp.name
-     ORDER BY period_start ASC, user_name ASC, mission_name ASC`,
+     GROUP BY DATE_TRUNC('week', wh.work_date), u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, t.name, comp.name
+     ORDER BY period_start ASC, user_name ASC, task_name ASC`,
     params,
   );
 
@@ -177,6 +178,7 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
        u.role AS user_role,
        COALESCE(c.id, 0) AS mission_id,
        COALESCE(c.name, '(sans mission)') AS mission_name,
+       COALESCE(t.name, '(sans tâche)') AS task_name,
        COALESCE(comp.name, '—') AS company_name,
        COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0) AS total_hours,
        COUNT(*)::int AS entries_count
@@ -187,8 +189,8 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
      LEFT JOIN companies comp ON comp.id = c.company_id
      WHERE wh.work_date >= $1::date
        AND wh.work_date < ($1::date + INTERVAL '1 month')
-     GROUP BY u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, comp.name
-     ORDER BY user_name ASC, mission_name ASC`,
+     GROUP BY u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, t.name, comp.name
+     ORDER BY user_name ASC, task_name ASC`,
     params,
   );
 

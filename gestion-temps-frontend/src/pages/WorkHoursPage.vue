@@ -74,8 +74,8 @@
 
         <q-list separator>
           <q-item
-            v-for="item in workHours"
-            :key="item.work_hour_id"
+            v-for="item in paginatedWorkHours"
+            :key="item.work_hour_id || item.id"
             class="gt-list-item work-hour-item"
           >
             <q-item-section>
@@ -96,13 +96,93 @@
             </q-item-section>
           </q-item>
         </q-list>
+        <q-pagination
+          v-if="workHourPageCount > 1"
+          v-model="workHourPage"
+          :max="workHourPageCount"
+          max-pages="5"
+          boundary-numbers
+          class="q-mt-sm"
+        />
+      </q-card-section>
+    </q-card>
+
+    <!-- RÉCAPITULATION QUOTIDIENNE -->
+    <q-card class="q-mb-md gt-card gt-enter-up gt-delay-2">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Récapitulation journalière ({{ todayDate }})</div>
+        <q-list separator>
+          <q-item
+            v-for="item in dailyItems"
+            :key="item.work_hour_id || item.id"
+            class="gt-list-item"
+          >
+            <q-item-section>
+              <div class="text-body2">
+                <strong>Mission:</strong> {{ item.case_name || '(sans mission)' }}
+              </div>
+              <div class="text-caption text-grey-7">
+                <strong>Société:</strong> {{ item.company_name || '—' }}
+              </div>
+              <div class="text-caption text-grey-7">
+                <strong>Tâche:</strong> {{ item.task_name || '(sans tâche)' }}
+              </div>
+              <div class="text-caption text-grey-7">
+                <strong>Date:</strong> {{ formatWorkDate(item.work_date) }} |
+                <strong>Heure d’entrée:</strong> {{ formatTime(item.start_time) }}
+              </div>
+            </q-item-section>
+            <q-item-section side>
+              <div>{{ clockRangeToDurationHHMM(item.start_time, item.end_time) }}</div>
+            </q-item-section>
+          </q-item>
+          <q-item v-if="!dailyItems.length">
+            <q-item-section>Aucune entrée pour aujourd’hui.</q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+    </q-card>
+
+    <!-- RÉCAPITULATION MENSUELLE -->
+    <q-card class="gt-card gt-enter-up gt-delay-2">
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">Récapitulation mensuelle ({{ monthLabel }})</div>
+        <q-list separator>
+          <q-item
+            v-for="item in monthlyItems"
+            :key="item.work_hour_id || item.id"
+            class="gt-list-item"
+          >
+            <q-item-section>
+              <div class="text-body2">
+                <strong>Mission:</strong> {{ item.case_name || '(sans mission)' }}
+              </div>
+              <div class="text-caption text-grey-7">
+                <strong>Société:</strong> {{ item.company_name || '—' }}
+              </div>
+              <div class="text-caption text-grey-7">
+                <strong>Tâche:</strong> {{ item.task_name || '(sans tâche)' }}
+              </div>
+              <div class="text-caption text-grey-7">
+                <strong>Date:</strong> {{ formatWorkDate(item.work_date) }} |
+                <strong>Heure d’entrée:</strong> {{ formatTime(item.start_time) }}
+              </div>
+            </q-item-section>
+            <q-item-section side>
+              <div>{{ clockRangeToDurationHHMM(item.start_time, item.end_time) }}</div>
+            </q-item-section>
+          </q-item>
+          <q-item v-if="!monthlyItems.length">
+            <q-item-section>Aucune entrée pour ce mois.</q-item-section>
+          </q-item>
+        </q-list>
       </q-card-section>
     </q-card>
   </q-page>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Notify } from 'quasar'
 import { api } from 'src/boot/axios'
 import { useAuthStore } from 'src/stores/auth'
@@ -117,6 +197,8 @@ const cases = ref([])
 const workHours = ref([])
 const isOnlineState = ref(navigator.onLine)
 const timerRunning = ref(false)
+const workHourPage = ref(1)
+const pageSize = 10
 
 const form = ref({
   case_id: null,
@@ -124,6 +206,53 @@ const form = ref({
   work_date: '',
   start_time: '',
   end_time: '',
+})
+
+const todayDate = computed(() => {
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+})
+
+const monthLabel = computed(() => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+})
+
+const workHourPageCount = computed(() => Math.max(1, Math.ceil(workHours.value.length / pageSize)))
+
+const paginatedWorkHours = computed(() =>
+  workHours.value.slice((workHourPage.value - 1) * pageSize, workHourPage.value * pageSize),
+)
+
+const formatWorkDate = (raw) => {
+  if (!raw) return '—'
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return String(raw).slice(0, 10)
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+const formatTime = (raw) => {
+  if (!raw) return '—'
+  const time = String(raw)
+  const match = time.match(/(\d{2}:\d{2})/) || time.match(/(\d{2}:\d{2}:\d{2})/)
+  return match ? match[1] : time
+}
+
+const dailyItems = computed(() => {
+  const today = todayDate.value
+  return workHours.value.filter((item) => formatWorkDate(item.work_date) === today)
+})
+
+const monthlyItems = computed(() => {
+  const now = new Date()
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  return workHours.value.filter((item) => String(item.work_date || '').startsWith(monthPrefix))
 })
 
 const caseLabel = (c) => `${c.name}${c.company_name ? ` — ${c.company_name}` : ''}`
@@ -134,7 +263,7 @@ const lineLabel = (item) => {
     : null
   const task = item.task_name || null
   const head = mission || task || '—'
-  return `${head} — ${item.work_date}`
+  return `${head} — ${formatWorkDate(item.work_date)} — entrée ${formatTime(item.start_time)}`
 }
 
 const loadTasks = async () => {

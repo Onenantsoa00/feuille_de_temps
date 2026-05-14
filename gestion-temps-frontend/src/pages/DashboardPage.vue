@@ -36,9 +36,9 @@
       </q-card>
     </div>
 
-    <div v-if="isAdminLike && missionDeadlines.length" class="column q-gutter-sm q-mb-md">
+    <div v-if="isAdminLike && filteredMissionDeadlines.length" class="column q-gutter-sm q-mb-md">
       <q-banner
-        v-for="row in missionDeadlines"
+        v-for="row in filteredMissionDeadlines"
         :key="`${row.mission_id}-${row.level}`"
         rounded
         dense
@@ -359,6 +359,66 @@ const matchesSearch = (item, keys) => {
   )
 }
 
+const matchUserFields = (item) =>
+  ['user_name', 'user_email', 'user_role'].some((key) =>
+    String(item[key] || '')
+      .toLowerCase()
+      .includes(normalizedSearch.value),
+  )
+
+const matchMissionFields = (item) =>
+  ['mission_name', 'company_name'].some((key) =>
+    String(item[key] || '')
+      .toLowerCase()
+      .includes(normalizedSearch.value),
+  )
+
+const isPersonSearch = computed(() => {
+  if (!normalizedSearch.value) return false
+  return (
+    (stats.value.topCollaborateurs || []).some(matchUserFields) ||
+    (stats.value.topUsers || []).some((row) =>
+      String(row.name || '')
+        .toLowerCase()
+        .includes(normalizedSearch.value),
+    ) ||
+    (stats.value.taskTraces || []).some(matchUserFields)
+  )
+})
+
+const isMissionSearch = computed(() => {
+  if (!normalizedSearch.value) return false
+  return (
+    (stats.value.topMissions || []).some(matchMissionFields) ||
+    (stats.value.weeklyMissionSummaries || []).some(matchMissionFields) ||
+    (stats.value.monthlyMissionSummaries || []).some(matchMissionFields) ||
+    (stats.value.taskTraces || []).some(matchMissionFields)
+  )
+})
+
+const missionsAssignedToSearchUser = computed(() => {
+  if (!isPersonSearch.value) return new Set()
+  return new Set(
+    (stats.value.taskTraces || [])
+      .filter(matchUserFields)
+      .map((row) => row.mission_name)
+      .filter(Boolean),
+  )
+})
+
+const filterMissionRow = (row) => {
+  if (!normalizedSearch.value) return true
+  const missionMatches = matchMissionFields(row)
+  if (isPersonSearch.value) {
+    const assignedToUser = missionsAssignedToSearchUser.value.has(row.mission_name)
+    return assignedToUser || missionMatches
+  }
+  if (isMissionSearch.value) {
+    return missionMatches
+  }
+  return matchesSearch(row, ['mission_name', 'company_name'])
+}
+
 const filteredTaskTraces = computed(() =>
   (stats.value.taskTraces || []).filter((row) =>
     matchesSearch(row, [
@@ -373,22 +433,14 @@ const filteredTaskTraces = computed(() =>
 )
 
 const filteredWeeklyMissionSummaries = computed(() =>
-  (stats.value.weeklyMissionSummaries || []).filter((row) =>
-    matchesSearch(row, ['mission_name', 'company_name']),
-  ),
+  (stats.value.weeklyMissionSummaries || []).filter(filterMissionRow),
 )
 
 const filteredMonthlyMissionSummaries = computed(() =>
-  (stats.value.monthlyMissionSummaries || []).filter((row) =>
-    matchesSearch(row, ['mission_name', 'company_name']),
-  ),
+  (stats.value.monthlyMissionSummaries || []).filter(filterMissionRow),
 )
 
-const filteredTopMissions = computed(() =>
-  (stats.value.topMissions || []).filter((row) =>
-    matchesSearch(row, ['mission_name', 'company_name']),
-  ),
-)
+const filteredTopMissions = computed(() => (stats.value.topMissions || []).filter(filterMissionRow))
 
 const filteredTopCollaborateurs = computed(() =>
   (stats.value.topCollaborateurs || []).filter((row) =>
@@ -513,7 +565,7 @@ function colorForMission(name) {
   return PALETTE[h % PALETTE.length]
 }
 
-const adminBarTraces = computed(() => (stats.value.taskTraces || []).slice(0, 40))
+const adminBarTraces = computed(() => filteredTaskTraces.value.slice(0, 40))
 
 const useTraceBarChart = computed(() => adminBarTraces.value.length > 0)
 
@@ -567,6 +619,8 @@ const missionDeadlines = computed(() => {
     }
   })
 })
+
+const filteredMissionDeadlines = computed(() => missionDeadlines.value.filter(filterMissionRow))
 
 const adminBarChartData = computed(() => {
   const traces = adminBarTraces.value

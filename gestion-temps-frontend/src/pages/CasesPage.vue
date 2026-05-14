@@ -32,6 +32,22 @@
           dense
         />
 
+        <q-select
+          v-model="collaborator_ids"
+          :options="collaborators"
+          :option-label="userLabel"
+          option-value="id"
+          emit-value
+          map-options
+          multiple
+          use-chips
+          label="Collaborateurs"
+          outlined
+          dense
+          :disable="!auth.isAdmin"
+          hint="Sélectionnez des collaborateurs. Les chefs de mission peuvent aussi être ajoutés ici."
+        />
+
         <q-input v-model="description" label="Description" type="textarea" outlined dense />
 
         <q-input v-model="start_date" label="Date début" type="date" outlined dense />
@@ -61,9 +77,19 @@
 
     <q-card class="gt-card gt-enter-up gt-delay-1">
       <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">Liste</div>
+        <div class="row items-center justify-between q-mb-sm">
+          <div class="text-subtitle1">Liste</div>
+          <q-input
+            dense
+            outlined
+            debounce="300"
+            v-model="searchQuery"
+            placeholder="Recherche par collaborateur, mission ou société"
+            class="col-12 col-md-6"
+          />
+        </div>
         <q-list bordered separator>
-          <q-item v-for="c in cases" :key="c.id" class="gt-list-item">
+          <q-item v-for="c in filteredCases" :key="c.id" class="gt-list-item">
             <q-item-section>
               <q-item-label>
                 {{ c.name }} — {{ c.company_name ?? '—' }} —
@@ -186,9 +212,11 @@ const companies = ref([])
 const users = ref([])
 const pendingCases = ref([])
 
+const searchQuery = ref('')
 const name = ref('')
 const company_id = ref(null)
 const chef_ids = ref([])
+const collaborator_ids = ref([])
 const editingCaseId = ref(null)
 const description = ref('')
 const start_date = ref('')
@@ -203,6 +231,10 @@ const chefs = computed(() =>
   users.value.filter((u) => ['chef', 'chef_mission', 'chef_de_mission'].includes(u.role)),
 )
 
+const collaborators = computed(() =>
+  users.value.filter((u) => ['employe', 'collaborateur', 'chef_de_mission'].includes(u.role)),
+)
+
 const employees = computed(() =>
   users.value.filter((u) => ['employe', 'collaborateur'].includes(u.role)),
 )
@@ -213,7 +245,31 @@ const chefMissions = computed(() =>
     return assignedChefs.some((u) => u.id === auth.user?.id)
   }),
 )
-const missionCards = computed(() => (auth.isAdmin ? cases.value : chefMissions.value))
+const filteredCases = computed(() => {
+  if (!searchQuery.value?.trim()) return cases.value
+  const normalized = searchQuery.value.trim().toLowerCase()
+  return cases.value.filter((c) => {
+    if (
+      String(c.name || '')
+        .toLowerCase()
+        .includes(normalized)
+    )
+      return true
+    if (
+      String(c.company_name || '')
+        .toLowerCase()
+        .includes(normalized)
+    )
+      return true
+    const chefs = Array.isArray(c.assigned_chefs) ? c.assigned_chefs : []
+    const collaborators = Array.isArray(c.assigned_collaborators) ? c.assigned_collaborators : []
+    return [...chefs, ...collaborators].some((u) =>
+      [u.first_name, u.name, u.email].filter(Boolean).join(' ').toLowerCase().includes(normalized),
+    )
+  })
+})
+
+const missionCards = computed(() => (auth.isAdmin ? filteredCases.value : chefMissions.value))
 
 const userLabel = (u) => {
   const fullName = [u.first_name, u.name].filter(Boolean).join(' ').trim()
@@ -303,6 +359,7 @@ const resetForm = () => {
   name.value = ''
   company_id.value = null
   chef_ids.value = []
+  collaborator_ids.value = []
   description.value = ''
   start_date.value = ''
   end_date.value = ''
@@ -315,6 +372,9 @@ const startEdit = (c) => {
   company_id.value = c.company_id ?? null
   const assignedChefs = Array.isArray(c.assigned_chefs) ? c.assigned_chefs.map((u) => u.id) : []
   chef_ids.value = [...new Set([c.user_id, ...assignedChefs].filter(Boolean))]
+  collaborator_ids.value = Array.isArray(c.assigned_collaborators)
+    ? c.assigned_collaborators.map((u) => u.id)
+    : []
   description.value = c.description ?? ''
   start_date.value = c.start_date ? new Date(c.start_date).toISOString().slice(0, 10) : ''
   end_date.value = c.end_date ? new Date(c.end_date).toISOString().slice(0, 10) : ''
@@ -353,6 +413,7 @@ const saveCase = async () => {
       company_id: company_id.value,
       chef_id: chef_ids.value[0],
       chef_ids: chef_ids.value,
+      collaborator_ids: collaborator_ids.value,
       description: description.value,
       start_date: start_date.value,
       end_date: endDateIndefinite.value ? null : end_date.value || null,
