@@ -57,6 +57,7 @@ const getAllMissionReports = async () => {
   const result = await pool.query(
     `SELECT
        c.id AS mission_id,
+       COALESCE(comp.id, 0) AS company_id,
        COALESCE(c.name, '(sans mission)') AS mission_name,
        COALESCE(comp.name, '—') AS company_name,
        COUNT(DISTINCT wh.user_id)::int AS participants_count,
@@ -67,7 +68,7 @@ const getAllMissionReports = async () => {
      LEFT JOIN companies comp ON comp.id = c.company_id
      LEFT JOIN tasks t ON t.case_id = c.id
      LEFT JOIN work_hours wh ON wh.task_id = t.id
-     GROUP BY c.id, c.name, comp.name, c.start_date, c.end_date
+     GROUP BY c.id, c.name, comp.id, comp.name, c.start_date, c.end_date
      ORDER BY c.end_date DESC NULLS LAST, total_hours DESC, mission_name ASC`,
   );
   return result.rows;
@@ -82,6 +83,7 @@ const getMissionReportsForMonth = async (monthStr) => {
     `SELECT
        DATE_TRUNC('week', wh.work_date)::date::text AS period_start,
        c.id AS mission_id,
+       COALESCE(comp.id, 0) AS company_id,
        c.name AS mission_name,
        COALESCE(comp.name, '—') AS company_name,
        COUNT(DISTINCT wh.user_id)::int AS participants_count,
@@ -92,7 +94,7 @@ const getMissionReportsForMonth = async (monthStr) => {
      LEFT JOIN companies comp ON comp.id = c.company_id
      WHERE wh.work_date >= $1::date
        AND wh.work_date < ($1::date + INTERVAL '1 month')
-     GROUP BY DATE_TRUNC('week', wh.work_date), c.id, c.name, comp.name
+     GROUP BY DATE_TRUNC('week', wh.work_date), c.id, c.name, comp.id, comp.name
      ORDER BY period_start ASC, total_hours DESC, c.name ASC`,
     params,
   );
@@ -101,6 +103,7 @@ const getMissionReportsForMonth = async (monthStr) => {
     `SELECT
        $1::text AS period_start,
       COALESCE(c.id, 0) AS mission_id,
+      COALESCE(comp.id, 0) AS company_id,
       COALESCE(c.name, '(sans mission)') AS mission_name,
       COALESCE(comp.name, '—') AS company_name,
       COUNT(DISTINCT wh.user_id)::int AS participants_count,
@@ -111,7 +114,7 @@ const getMissionReportsForMonth = async (monthStr) => {
     LEFT JOIN companies comp ON comp.id = c.company_id
     WHERE wh.work_date >= $1::date
       AND wh.work_date < ($1::date + INTERVAL '1 month')
-    GROUP BY COALESCE(c.id, 0), COALESCE(c.name, '(sans mission)'), comp.name
+    GROUP BY COALESCE(c.id, 0), COALESCE(comp.id, 0), COALESCE(c.name, '(sans mission)'), comp.name
     ORDER BY total_hours DESC, mission_name ASC`,
     params,
   );
@@ -152,6 +155,7 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
        u.email AS user_email,
        u.role AS user_role,
        COALESCE(c.id, 0) AS mission_id,
+       COALESCE(comp.id, 0) AS company_id,
        COALESCE(c.name, '(sans mission)') AS mission_name,
        COALESCE(t.name, '(sans tâche)') AS task_name,
        COALESCE(comp.name, '—') AS company_name,
@@ -164,7 +168,7 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
      LEFT JOIN companies comp ON comp.id = c.company_id
      WHERE wh.work_date >= $1::date
        AND wh.work_date < ($1::date + INTERVAL '1 month')
-     GROUP BY DATE_TRUNC('week', wh.work_date), u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, t.name, comp.name
+     GROUP BY DATE_TRUNC('week', wh.work_date), u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, t.name, comp.id, comp.name
      ORDER BY period_start ASC, user_name ASC, task_name ASC`,
     params,
   );
@@ -177,6 +181,7 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
        u.email AS user_email,
        u.role AS user_role,
        COALESCE(c.id, 0) AS mission_id,
+       COALESCE(comp.id, 0) AS company_id,
        COALESCE(c.name, '(sans mission)') AS mission_name,
        COALESCE(t.name, '(sans tâche)') AS task_name,
        COALESCE(comp.name, '—') AS company_name,
@@ -189,7 +194,7 @@ const getCollaboratorReportsForMonth = async (monthStr) => {
      LEFT JOIN companies comp ON comp.id = c.company_id
      WHERE wh.work_date >= $1::date
        AND wh.work_date < ($1::date + INTERVAL '1 month')
-     GROUP BY u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, t.name, comp.name
+     GROUP BY u.id, u.first_name, u.name, u.email, u.role, c.id, c.name, t.name, comp.id, comp.name
      ORDER BY user_name ASC, task_name ASC`,
     params,
   );

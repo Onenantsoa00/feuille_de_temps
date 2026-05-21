@@ -77,7 +77,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in sortedWeeklyRows" :key="`w-${i}`">
+            <tr v-for="(row, i) in paginatedWeeklyRows" :key="`w-${i}`">
               <td>{{ row.period_start }}</td>
               <td>{{ row.user_name }}</td>
               <td>{{ row.user_email }}</td>
@@ -88,11 +88,14 @@
               <td>{{ row.entries_count }}</td>
               <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
             </tr>
-            <tr v-if="!sortedWeeklyRows.length">
+            <tr v-if="!paginatedWeeklyRows.length">
               <td colspan="9" class="text-grey-7">Aucune donnée pour ce filtre.</td>
             </tr>
           </tbody>
         </q-markup-table>
+        <div v-if="filteredWeeklyRows.length > 0" class="row justify-center q-mt-md">
+          <q-pagination v-model="weeklyPage" :max="weeklyMaxPages" direction-links boundary-links />
+        </div>
       </q-card-section>
     </q-card>
 
@@ -125,7 +128,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in sortedMonthlyRows" :key="`m-${i}`">
+            <tr v-for="(row, i) in paginatedMonthlyRows" :key="`m-${i}`">
               <td>{{ row.user_name }}</td>
               <td>{{ row.user_email }}</td>
               <td>{{ row.user_role }}</td>
@@ -135,11 +138,19 @@
               <td>{{ row.entries_count }}</td>
               <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
             </tr>
-            <tr v-if="!sortedMonthlyRows.length">
+            <tr v-if="!paginatedMonthlyRows.length">
               <td colspan="8" class="text-grey-7">Aucune donnée pour ce filtre.</td>
             </tr>
           </tbody>
         </q-markup-table>
+        <div v-if="filteredMonthlyRows.length > 0" class="row justify-center q-mt-md">
+          <q-pagination
+            v-model="monthlyPage"
+            :max="monthlyMaxPages"
+            direction-links
+            boundary-links
+          />
+        </div>
       </q-card-section>
     </q-card>
 
@@ -156,17 +167,20 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in recapRows" :key="`r-${i}`">
+            <tr v-for="(row, i) in paginatedRecapRows" :key="`r-${i}`">
               <td>{{ row.user_name }}</td>
               <td>{{ row.user_email }}</td>
               <td>{{ row.user_role }}</td>
               <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
             </tr>
-            <tr v-if="!recapRows.length">
+            <tr v-if="!paginatedRecapRows.length">
               <td colspan="4" class="text-grey-7">Aucune récapitulation pour ce mois.</td>
             </tr>
           </tbody>
         </q-markup-table>
+        <div v-if="recapRows.length > 0" class="row justify-center q-mt-md">
+          <q-pagination v-model="recapPage" :max="recapMaxPages" direction-links boundary-links />
+        </div>
       </q-card-section>
     </q-card>
   </q-page>
@@ -183,6 +197,11 @@ const monthlyRows = ref([])
 const recapRows = ref([])
 const selectedUserId = ref(null)
 const selectedMissionId = ref(null)
+
+const weeklyPage = ref(1)
+const monthlyPage = ref(1)
+const recapPage = ref(1)
+const itemsPerPage = 10
 
 function defaultMonth() {
   const d = new Date()
@@ -274,6 +293,25 @@ const sortRows = (rows, sortState) => {
 const sortedWeeklyRows = computed(() => sortRows(filteredWeeklyRows.value, weeklySort.value))
 const sortedMonthlyRows = computed(() => sortRows(filteredMonthlyRows.value, monthlySort.value))
 
+const weeklyMaxPages = computed(() => Math.ceil(sortedWeeklyRows.value.length / itemsPerPage))
+const monthlyMaxPages = computed(() => Math.ceil(sortedMonthlyRows.value.length / itemsPerPage))
+const recapMaxPages = computed(() => Math.ceil(recapRows.value.length / itemsPerPage))
+
+const paginatedWeeklyRows = computed(() => {
+  const start = (weeklyPage.value - 1) * itemsPerPage
+  return sortedWeeklyRows.value.slice(start, start + itemsPerPage)
+})
+
+const paginatedMonthlyRows = computed(() => {
+  const start = (monthlyPage.value - 1) * itemsPerPage
+  return sortedMonthlyRows.value.slice(start, start + itemsPerPage)
+})
+
+const paginatedRecapRows = computed(() => {
+  const start = (recapPage.value - 1) * itemsPerPage
+  return recapRows.value.slice(start, start + itemsPerPage)
+})
+
 const sortWeekly = (field) => {
   if (weeklySort.value.field === field) {
     weeklySort.value.direction = weeklySort.value.direction === 'asc' ? 'desc' : 'asc'
@@ -299,6 +337,9 @@ async function load() {
   weeklyRows.value = res.data.weekly || []
   monthlyRows.value = res.data.monthly || []
   recapRows.value = res.data.recap || []
+  weeklyPage.value = 1
+  monthlyPage.value = 1
+  recapPage.value = 1
 }
 
 function print() {

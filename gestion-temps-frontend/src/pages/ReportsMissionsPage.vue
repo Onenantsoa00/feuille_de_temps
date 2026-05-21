@@ -13,6 +13,34 @@
           style="min-width: 180px"
           @update:model-value="load"
         />
+        <q-select
+          v-model="selectedMissionId"
+          :options="missionOptions"
+          emit-value
+          map-options
+          option-label="label"
+          option-value="value"
+          label="Filtre mission"
+          dense
+          outlined
+          clearable
+          class="col-auto"
+          style="min-width: 220px"
+        />
+        <q-select
+          v-model="selectedCompanyId"
+          :options="companyOptions"
+          emit-value
+          map-options
+          option-label="label"
+          option-value="value"
+          label="Filtre société"
+          dense
+          outlined
+          clearable
+          class="col-auto"
+          style="min-width: 220px"
+        />
         <q-btn color="primary" outline icon="print" label="Imprimer" @click="print" />
       </div>
     </div>
@@ -39,18 +67,21 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in sortedWeeklyRows" :key="`w-${i}`">
+            <tr v-for="(row, i) in paginatedWeeklyRows" :key="`w-${i}`">
               <td>{{ row.period_start }}</td>
               <td>{{ row.mission_name }}</td>
               <td>{{ row.company_name }}</td>
               <td>{{ row.participants_count }}</td>
               <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
             </tr>
-            <tr v-if="!sortedWeeklyRows.length">
+            <tr v-if="!paginatedWeeklyRows.length">
               <td colspan="5" class="text-grey-7">Aucune donnée pour ce mois.</td>
             </tr>
           </tbody>
         </q-markup-table>
+        <div v-if="filteredWeeklyRows.length > 0" class="row justify-center q-mt-md">
+          <q-pagination v-model="weeklyPage" :max="weeklyMaxPages" direction-links boundary-links />
+        </div>
       </q-card-section>
     </q-card>
 
@@ -73,17 +104,25 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in sortedMonthlyRows" :key="`m-${i}`">
+            <tr v-for="(row, i) in paginatedMonthlyRows" :key="`m-${i}`">
               <td>{{ row.mission_name }}</td>
               <td>{{ row.company_name }}</td>
               <td>{{ row.participants_count }}</td>
               <td>{{ decimalHoursToHHMM(row.total_hours) }}</td>
             </tr>
-            <tr v-if="!sortedMonthlyRows.length">
+            <tr v-if="!paginatedMonthlyRows.length">
               <td colspan="4" class="text-grey-7">Aucune donnée pour ce mois.</td>
             </tr>
           </tbody>
         </q-markup-table>
+        <div v-if="filteredMonthlyRows.length > 0" class="row justify-center q-mt-md">
+          <q-pagination
+            v-model="monthlyPage"
+            :max="monthlyMaxPages"
+            direction-links
+            boundary-links
+          />
+        </div>
       </q-card-section>
     </q-card>
 
@@ -104,7 +143,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in missionRows" :key="`f-${i}`">
+            <tr v-for="(row, i) in paginatedMissionRows" :key="`f-${i}`">
               <td>{{ row.mission_name }}</td>
               <td>{{ row.company_name }}</td>
               <td>{{ row.participants_count }}</td>
@@ -112,11 +151,19 @@
               <td>{{ row.start_date || '—' }}</td>
               <td>{{ row.end_date || '—' }}</td>
             </tr>
-            <tr v-if="!missionRows.length">
+            <tr v-if="!paginatedMissionRows.length">
               <td colspan="6" class="text-grey-7">Aucune mission.</td>
             </tr>
           </tbody>
         </q-markup-table>
+        <div v-if="filteredMissionRows.length > 0" class="row justify-center q-mt-md">
+          <q-pagination
+            v-model="missionPage"
+            :max="missionMaxPages"
+            direction-links
+            boundary-links
+          />
+        </div>
       </q-card-section>
     </q-card>
   </q-page>
@@ -131,6 +178,13 @@ const month = ref(defaultMonth())
 const weeklyRows = ref([])
 const monthlyRows = ref([])
 const missionRows = ref([])
+const selectedMissionId = ref(null)
+const selectedCompanyId = ref(null)
+
+const weeklyPage = ref(1)
+const monthlyPage = ref(1)
+const missionPage = ref(1)
+const itemsPerPage = 10
 
 function defaultMonth() {
   const d = new Date()
@@ -138,6 +192,83 @@ function defaultMonth() {
 }
 
 const monthLabel = computed(() => month.value || '')
+
+const missionOptions = computed(() => {
+  const map = new Map()
+  for (const row of monthlyRows.value) {
+    const key = Number(row.mission_id || 0)
+    if (!map.has(key)) {
+      map.set(key, {
+        label: row.mission_name,
+        value: key,
+      })
+    }
+  }
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, 'fr'))
+})
+
+const companyOptions = computed(() => {
+  const map = new Map()
+  for (const row of monthlyRows.value) {
+    const key = Number(row.company_id || 0)
+    if (!map.has(key)) {
+      map.set(key, {
+        label: row.company_name,
+        value: key,
+      })
+    }
+  }
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, 'fr'))
+})
+
+const filteredWeeklyRows = computed(() =>
+  weeklyRows.value.filter((row) => {
+    if (
+      selectedMissionId.value != null &&
+      Number(row.mission_id || 0) !== Number(selectedMissionId.value)
+    )
+      return false
+    if (
+      selectedCompanyId.value != null &&
+      Number(row.company_id || 0) !== Number(selectedCompanyId.value)
+    )
+      return false
+    return true
+  }),
+)
+
+const filteredMonthlyRows = computed(() =>
+  monthlyRows.value.filter((row) => {
+    if (
+      selectedMissionId.value != null &&
+      Number(row.mission_id || 0) !== Number(selectedMissionId.value)
+    )
+      return false
+    if (
+      selectedCompanyId.value != null &&
+      Number(row.company_id || 0) !== Number(selectedCompanyId.value)
+    )
+      return false
+    return true
+  }),
+)
+
+const filteredMissionRows = computed(() =>
+  missionRows.value.filter((row) => {
+    if (
+      selectedMissionId.value != null &&
+      Number(row.mission_id || 0) !== Number(selectedMissionId.value)
+    )
+      return false
+    if (
+      selectedCompanyId.value != null &&
+      Number(row.company_id || 0) !== Number(selectedCompanyId.value)
+    )
+      return false
+    return true
+  }),
+)
+
 const weeklySort = ref({ field: 'period_start', direction: 'asc' })
 const monthlySort = ref({ field: 'participants_count', direction: 'desc' })
 
@@ -164,8 +295,27 @@ const sortRows = (rows, sortState) => {
   })
 }
 
-const sortedWeeklyRows = computed(() => sortRows(weeklyRows.value, weeklySort.value))
-const sortedMonthlyRows = computed(() => sortRows(monthlyRows.value, monthlySort.value))
+const sortedWeeklyRows = computed(() => sortRows(filteredWeeklyRows.value, weeklySort.value))
+const sortedMonthlyRows = computed(() => sortRows(filteredMonthlyRows.value, monthlySort.value))
+
+const weeklyMaxPages = computed(() => Math.ceil(sortedWeeklyRows.value.length / itemsPerPage))
+const monthlyMaxPages = computed(() => Math.ceil(sortedMonthlyRows.value.length / itemsPerPage))
+const missionMaxPages = computed(() => Math.ceil(filteredMissionRows.value.length / itemsPerPage))
+
+const paginatedWeeklyRows = computed(() => {
+  const start = (weeklyPage.value - 1) * itemsPerPage
+  return sortedWeeklyRows.value.slice(start, start + itemsPerPage)
+})
+
+const paginatedMonthlyRows = computed(() => {
+  const start = (monthlyPage.value - 1) * itemsPerPage
+  return sortedMonthlyRows.value.slice(start, start + itemsPerPage)
+})
+
+const paginatedMissionRows = computed(() => {
+  const start = (missionPage.value - 1) * itemsPerPage
+  return filteredMissionRows.value.slice(start, start + itemsPerPage)
+})
 
 const sortWeekly = (field) => {
   if (weeklySort.value.field === field) {
@@ -192,6 +342,9 @@ async function load() {
   weeklyRows.value = res.data.weekly || []
   monthlyRows.value = res.data.monthly || []
   missionRows.value = res.data.finished || []
+  weeklyPage.value = 1
+  monthlyPage.value = 1
+  missionPage.value = 1
 }
 
 function print() {
