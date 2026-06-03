@@ -148,6 +148,9 @@ const adminChangeUserPassword = async (req, res) => {
 
 const getUsers = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Utilisateur non authentifié" });
+    }
     const roleFilter = req.query.role || undefined;
     const isAdmin = normalizeRole(req.user.role) === "admin";
     const users = await userModel.getAllUsers({
@@ -157,6 +160,7 @@ const getUsers = async (req, res) => {
     });
     res.json(users);
   } catch (error) {
+    console.error("GET USERS ERROR:", error);
     res.status(500).json({ message: "Erreur récupération users" });
   }
 };

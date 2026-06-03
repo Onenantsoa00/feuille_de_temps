@@ -41,6 +41,7 @@
           class="col-auto"
           style="min-width: 220px"
         />
+        <q-btn color="primary" outline icon="file_download" label="Exporter" @click="exportCsv" />
         <q-btn color="primary" outline icon="print" label="Imprimer" @click="print" />
       </div>
     </div>
@@ -328,6 +329,161 @@ const sortMonthly = (field) => {
     monthlySort.value.field = field
     monthlySort.value.direction = 'asc'
   }
+}
+
+const csvEscape = (value) => {
+  const text = value == null ? '' : String(value)
+  const escaped = text.replace(/"/g, '""')
+  return `"${escaped}"`
+}
+
+const downloadCsvFile = (content, filename) => {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', filename)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+const buildCsvSection = (title, headers, fields, rows, totals = []) => {
+  const lines = []
+  lines.push(csvEscape(title))
+  lines.push(headers.map(csvEscape).join(','))
+  rows.forEach((row) => {
+    lines.push(fields.map((field) => csvEscape(row[field])).join(','))
+  })
+  if (totals.length) {
+    lines.push(totals.map((value) => csvEscape(value)).join(','))
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+const exportCsv = () => {
+  const sections = []
+
+  const weeklyRowsData = filteredWeeklyRows.value.map((row) => ({
+    period_start: row.period_start,
+    user_name: row.user_name,
+    user_email: row.user_email,
+    user_role: row.user_role,
+    task_name: row.task_name,
+    mission_name: row.mission_name,
+    company_name: row.company_name,
+    entries_count: row.entries_count,
+    total_hours: decimalHoursToHHMM(row.total_hours),
+  }))
+  sections.push(
+    buildCsvSection(
+      `Par semaine (${monthLabel.value})`,
+      [
+        'Semaine (début)',
+        'Collaborateur',
+        'Email',
+        'Rôle',
+        'Tâche',
+        'Mission',
+        'Société',
+        'Entrées',
+        'Total heures',
+      ],
+      [
+        'period_start',
+        'user_name',
+        'user_email',
+        'user_role',
+        'task_name',
+        'mission_name',
+        'company_name',
+        'entries_count',
+        'total_hours',
+      ],
+      weeklyRowsData,
+      [
+        'TOTAL',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        filteredWeeklyRows.value.length,
+        decimalHoursToHHMM(
+          filteredWeeklyRows.value.reduce((sum, row) => sum + Number(row.total_hours || 0), 0),
+        ),
+      ],
+    ),
+  )
+
+  const monthlyRowsData = filteredMonthlyRows.value.map((row) => ({
+    user_name: row.user_name,
+    user_email: row.user_email,
+    user_role: row.user_role,
+    task_name: row.task_name,
+    mission_name: row.mission_name,
+    company_name: row.company_name,
+    entries_count: row.entries_count,
+    total_hours: decimalHoursToHHMM(row.total_hours),
+  }))
+  sections.push(
+    buildCsvSection(
+      `Pour le mois entier (${monthLabel.value})`,
+      ['Collaborateur', 'Email', 'Rôle', 'Tâche', 'Mission', 'Société', 'Entrées', 'Total heures'],
+      [
+        'user_name',
+        'user_email',
+        'user_role',
+        'task_name',
+        'mission_name',
+        'company_name',
+        'entries_count',
+        'total_hours',
+      ],
+      monthlyRowsData,
+      [
+        'TOTAL',
+        '',
+        '',
+        '',
+        '',
+        '',
+        filteredMonthlyRows.value.length,
+        decimalHoursToHHMM(
+          filteredMonthlyRows.value.reduce((sum, row) => sum + Number(row.total_hours || 0), 0),
+        ),
+      ],
+    ),
+  )
+
+  const recapRowsData = recapRows.value.map((row) => ({
+    user_name: row.user_name,
+    user_email: row.user_email,
+    user_role: row.user_role,
+    total_hours: decimalHoursToHHMM(row.total_hours),
+  }))
+  sections.push(
+    buildCsvSection(
+      'Récapitulation du collaborateur',
+      ['Collaborateur', 'Email', 'Rôle', 'Total heures'],
+      ['user_name', 'user_email', 'user_role', 'total_hours'],
+      recapRowsData,
+      [
+        'TOTAL',
+        '',
+        '',
+        decimalHoursToHHMM(
+          recapRows.value.reduce((sum, row) => sum + Number(row.total_hours || 0), 0),
+        ),
+      ],
+    ),
+  )
+
+  downloadCsvFile(sections.join('\n'), `rapport-collaborateurs-${month.value}.csv`)
 }
 
 async function load() {

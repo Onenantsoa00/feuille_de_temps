@@ -41,6 +41,7 @@
           class="col-auto"
           style="min-width: 220px"
         />
+        <q-btn color="primary" outline icon="file_download" label="Exporter" @click="exportCsv" />
         <q-btn color="primary" outline icon="print" label="Imprimer" @click="print" />
       </div>
     </div>
@@ -333,6 +334,127 @@ const sortMonthly = (field) => {
     monthlySort.value.field = field
     monthlySort.value.direction = 'asc'
   }
+}
+
+const csvEscape = (value) => {
+  const text = value == null ? '' : String(value)
+  const escaped = text.replace(/"/g, '""')
+  return `"${escaped}"`
+}
+
+const downloadCsvFile = (content, filename) => {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', filename)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+const buildCsvSection = (title, headers, fields, rows, totals = []) => {
+  const lines = []
+  lines.push(csvEscape(title))
+  lines.push(headers.map(csvEscape).join(','))
+  rows.forEach((row) => {
+    lines.push(fields.map((field) => csvEscape(row[field])).join(','))
+  })
+  if (totals.length) {
+    lines.push(totals.map((value) => csvEscape(value)).join(','))
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+const exportCsv = () => {
+  const sections = []
+
+  const weeklyRowsData = filteredWeeklyRows.value.map((row) => ({
+    period_start: row.period_start,
+    mission_name: row.mission_name,
+    company_name: row.company_name,
+    participants_count: row.participants_count,
+    total_hours: decimalHoursToHHMM(row.total_hours),
+  }))
+  sections.push(
+    buildCsvSection(
+      `Synthèse par semaine (${monthLabel.value})`,
+      ['Semaine (début)', 'Mission', 'Société', 'Participants', 'Total heures'],
+      ['period_start', 'mission_name', 'company_name', 'participants_count', 'total_hours'],
+      weeklyRowsData,
+      [
+        'TOTAL',
+        '',
+        '',
+        filteredWeeklyRows.value.length,
+        decimalHoursToHHMM(
+          filteredWeeklyRows.value.reduce((sum, row) => sum + Number(row.total_hours || 0), 0),
+        ),
+      ],
+    ),
+  )
+
+  const monthlyRowsData = filteredMonthlyRows.value.map((row) => ({
+    mission_name: row.mission_name,
+    company_name: row.company_name,
+    participants_count: row.participants_count,
+    total_hours: decimalHoursToHHMM(row.total_hours),
+  }))
+  sections.push(
+    buildCsvSection(
+      `Synthèse pour le mois (${monthLabel.value})`,
+      ['Mission', 'Société', 'Participants', 'Total heures'],
+      ['mission_name', 'company_name', 'participants_count', 'total_hours'],
+      monthlyRowsData,
+      [
+        'TOTAL',
+        '',
+        filteredMonthlyRows.value.length,
+        decimalHoursToHHMM(
+          filteredMonthlyRows.value.reduce((sum, row) => sum + Number(row.total_hours || 0), 0),
+        ),
+      ],
+    ),
+  )
+
+  const missionRowsData = filteredMissionRows.value.map((row) => ({
+    mission_name: row.mission_name,
+    company_name: row.company_name,
+    participants_count: row.participants_count,
+    total_hours: decimalHoursToHHMM(row.total_hours),
+    start_date: row.start_date || '—',
+    end_date: row.end_date || '—',
+  }))
+  sections.push(
+    buildCsvSection(
+      "Depuis le début de mission jusqu'à la fin",
+      ['Mission', 'Société', 'Participants', 'Total heures', 'Date début', 'Finie le'],
+      [
+        'mission_name',
+        'company_name',
+        'participants_count',
+        'total_hours',
+        'start_date',
+        'end_date',
+      ],
+      missionRowsData,
+      [
+        'TOTAL',
+        '',
+        filteredMissionRows.value.length,
+        decimalHoursToHHMM(
+          filteredMissionRows.value.reduce((sum, row) => sum + Number(row.total_hours || 0), 0),
+        ),
+        '',
+        '',
+      ],
+    ),
+  )
+
+  downloadCsvFile(sections.join('\n'), `rapport-missions-${month.value}.csv`)
 }
 
 async function load() {

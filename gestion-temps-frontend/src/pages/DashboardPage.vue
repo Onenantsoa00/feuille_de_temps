@@ -23,271 +23,337 @@
       </div>
     </div>
 
-    <div class="row q-col-gutter-md q-mb-md">
+    <!-- Tabs Navigation for Admin -->
+    <q-tabs v-if="isAdminLike" v-model="currentTab" dense class="text-grey q-mb-md gt-tabs">
+      <q-tab name="accueil" label="Accueil" />
+      <q-tab name="suivi" label="Suivi" />
+    </q-tabs>
+
+    <!-- Tab: Accueil -->
+    <div v-show="!isAdminLike || currentTab === 'accueil'">
+      <div class="row q-col-gutter-md q-mb-md">
+        <q-card
+          v-for="card in stats.cards"
+          :key="card.key"
+          class="gt-card gt-enter-up col-12 col-sm-6 col-md-3"
+        >
+          <q-card-section>
+            <div class="text-subtitle2 text-grey-8">{{ card.label }}</div>
+            <div class="text-h5">{{ formatCardValue(card) }}</div>
+          </q-card-section>
+        </q-card>
+      </div>
+
+      <div v-if="isAdminLike && filteredMissionDeadlines.length" class="column q-gutter-sm q-mb-md">
+        <q-banner
+          v-for="row in filteredMissionDeadlines"
+          :key="`${row.mission_id}-${row.level}`"
+          rounded
+          dense
+          :class="row.bannerClass"
+        >
+          <template #avatar>
+            <q-icon size="sm" :name="row.icon" :color="row.iconColor" />
+          </template>
+          <div class="row items-center justify-between mission-banner-head">
+            <div class="text-weight-medium">{{ row.mission_name }}</div>
+            <q-btn
+              v-if="stats.role === 'admin' && Number(row.status) === 1"
+              flat
+              dense
+              color="negative"
+              label="Marquer finie"
+              @click="finishMission(row.mission_id)"
+            />
+          </div>
+          <div class="text-caption">
+            Société : {{ row.company_name }} — Échéance : {{ formatDeadlineLabel(row.end_date) }} —
+            {{ row.label }}
+          </div>
+        </q-banner>
+      </div>
+
+      <q-card class="q-mb-md gt-card gt-enter-up gt-delay-1">
+        <q-card-section>
+          <div class="text-subtitle1 q-mb-md">
+            {{
+              useTraceBarChart
+                ? 'Activités récentes (projet, durée, auteur)'
+                : isAdminLike
+                  ? 'Évolution des heures par mission'
+                  : 'Évolution des heures'
+            }}
+          </div>
+          <p v-if="!hasAnyChart" class="text-grey-7 text-body2">Aucune donnée pour ce profil.</p>
+          <div v-else-if="useTraceBarChart" class="chart-wrap">
+            <Bar :data="adminBarChartData" :options="adminBarChartOptions" />
+          </div>
+          <div v-else class="chart-wrap">
+            <Line :data="lineChartData" :options="lineChartOptions" />
+          </div>
+        </q-card-section>
+      </q-card>
+
       <q-card
-        v-for="card in stats.cards"
-        :key="card.key"
-        class="gt-card gt-enter-up col-12 col-sm-6 col-md-3"
+        v-if="isAdminLike && filteredTaskTraces.length"
+        class="q-mb-md gt-card gt-enter-up gt-delay-2"
       >
         <q-card-section>
-          <div class="text-subtitle2 text-grey-8">{{ card.label }}</div>
-          <div class="text-h5">{{ formatCardValue(card) }}</div>
+          <div class="text-subtitle1 q-mb-sm">Traces détaillées des tâches</div>
+          <q-list separator>
+            <q-item
+              v-for="(trace, idx) in paginatedTaskTraces"
+              :key="`trace-${idx}`"
+              class="gt-list-item"
+            >
+              <q-item-section>
+                <q-item-label>
+                  {{ trace.user_name }} / {{ trace.user_role }} / {{ trace.user_email }} —
+                  {{ trace.task_name }}
+                </q-item-label>
+                <q-item-label caption>
+                  {{ trace.work_date }} | {{ trace.company_name }} | {{ trace.mission_name }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>{{ decimalHoursToHHMM(trace.duration_hours) }}</q-item-section>
+            </q-item>
+          </q-list>
+          <q-pagination
+            v-if="taskTracesPageCount > 1"
+            v-model="taskTracesPage"
+            :max="taskTracesPageCount"
+            max-pages="5"
+            boundary-numbers
+            class="q-mt-sm"
+          />
+        </q-card-section>
+      </q-card>
+
+      <q-card v-if="isAdminLike && filteredWeeklyMissionSummaries.length" class="q-mb-md gt-card">
+        <q-card-section>
+          <div class="text-subtitle1 q-mb-sm">Résumé missions hebdomadaire</div>
+          <q-list separator>
+            <q-item v-for="(item, idx) in paginatedWeeklyMissionSummaries" :key="`wk-${idx}`">
+              <q-item-section>
+                <q-item-label>{{ item.mission_name }} — {{ item.company_name }}</q-item-label>
+                <q-item-label caption
+                  >Semaine: {{ item.period_start }} | Participants:
+                  {{ item.participants_count }}</q-item-label
+                >
+              </q-item-section>
+              <q-item-section side>{{ decimalHoursToHHMM(item.total_hours) }}</q-item-section>
+            </q-item>
+          </q-list>
+          <q-pagination
+            v-if="weeklyMissionPageCount > 1"
+            v-model="weeklyMissionPage"
+            :max="weeklyMissionPageCount"
+            max-pages="5"
+            boundary-numbers
+            class="q-mt-sm"
+          />
+        </q-card-section>
+      </q-card>
+
+      <q-card v-if="isAdminLike && filteredMonthlyMissionSummaries.length" class="q-mb-md gt-card">
+        <q-card-section>
+          <div class="text-subtitle1 q-mb-sm">Résumé missions mensuel</div>
+          <q-list separator>
+            <q-item v-for="(item, idx) in paginatedMonthlyMissionSummaries" :key="`mo-${idx}`">
+              <q-item-section>
+                <q-item-label>{{ item.mission_name }} — {{ item.company_name }}</q-item-label>
+                <q-item-label caption
+                  >Mois: {{ item.period_start }} | Participants:
+                  {{ item.participants_count }}</q-item-label
+                >
+              </q-item-section>
+              <q-item-section side>{{ decimalHoursToHHMM(item.total_hours) }}</q-item-section>
+            </q-item>
+          </q-list>
+          <q-pagination
+            v-if="monthlyMissionPageCount > 1"
+            v-model="monthlyMissionPage"
+            :max="monthlyMissionPageCount"
+            max-pages="5"
+            boundary-numbers
+            class="q-mt-sm"
+          />
+        </q-card-section>
+      </q-card>
+
+      <q-card
+        v-if="
+          stats.role === 'collaborateur' && stats.collaboratorStats?.missionContributions?.length
+        "
+        class="q-mb-md gt-card"
+      >
+        <q-card-section>
+          <div class="text-subtitle1 q-mb-sm">Mes contributions par mission</div>
+          <q-list separator>
+            <q-item v-for="m in stats.collaboratorStats.missionContributions" :key="m.mission_id">
+              <q-item-section>
+                <q-item-label>{{ m.mission_name || 'Sans mission' }}</q-item-label>
+                <q-item-label caption>{{ m.company_name }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>{{ decimalHoursToHHMM(m.total_hours) }}</q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+      </q-card>
+
+      <q-card
+        v-if="isAdminLike && filteredTopMissions.length"
+        class="q-mb-md gt-card gt-enter-up gt-delay-2"
+      >
+        <q-card-section>
+          <div class="text-subtitle1 q-mb-sm">Top missions</div>
+          <q-markup-table flat bordered dense class="gt-table-aligned gt-table-mobile">
+            <thead>
+              <tr>
+                <th>Mission</th>
+                <th>Société</th>
+                <th>Participants</th>
+                <th>Total heures</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in paginatedTopMissions" :key="m.mission_id">
+                <td>{{ m.mission_name }}</td>
+                <td>{{ m.company_name }}</td>
+                <td>{{ m.participants_count }}</td>
+                <td>{{ decimalHoursToHHMM(m.total_hours) }}</td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <q-pagination
+            v-if="topMissionsPageCount > 1"
+            v-model="topMissionsPage"
+            :max="topMissionsPageCount"
+            max-pages="5"
+            boundary-numbers
+            class="q-mt-sm"
+          />
+        </q-card-section>
+      </q-card>
+
+      <q-card
+        v-if="isAdminLike && filteredTopCollaborateurs.length"
+        class="q-mb-md gt-card gt-enter-up gt-delay-2"
+      >
+        <q-card-section>
+          <div class="text-subtitle1 q-mb-sm">Top collaborateurs</div>
+          <q-markup-table flat bordered dense class="gt-table-aligned gt-table-mobile">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Email</th>
+                <th>Rôle</th>
+                <th>Total heures</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in paginatedTopCollaborateurs" :key="u.user_id">
+                <td>{{ u.user_name }}</td>
+                <td>{{ u.user_email }}</td>
+                <td>{{ u.user_role }}</td>
+                <td>{{ decimalHoursToHHMM(u.total_hours) }}</td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <q-pagination
+            v-if="topCollaborateursPageCount > 1"
+            v-model="topCollaborateursPage"
+            :max="topCollaborateursPageCount"
+            max-pages="5"
+            boundary-numbers
+            class="q-mt-sm"
+          />
+        </q-card-section>
+      </q-card>
+
+      <q-card v-if="stats.topUsers?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
+        <q-card-section>
+          <div class="text-subtitle1">Top utilisateurs</div>
+          <q-list separator>
+            <q-item v-for="user in stats.topUsers" :key="user.id" class="gt-list-item">
+              <q-item-section>{{ user.name }}</q-item-section>
+              <q-item-section side>{{ decimalHoursToHHMM(user.total_hours) }}</q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+      </q-card>
+
+      <q-card v-if="stats.topTasks?.length" class="gt-card gt-enter-up gt-delay-3">
+        <q-card-section>
+          <div class="text-subtitle1">Top tâches</div>
+          <q-list separator>
+            <q-item
+              v-for="task in stats.topTasks"
+              :key="task.task_name || task.id"
+              class="gt-list-item"
+            >
+              <q-item-section>{{ task.name || task.task_name }}</q-item-section>
+              <q-item-section side>{{ decimalHoursToHHMM(task.total_hours) }}</q-item-section>
+            </q-item>
+          </q-list>
         </q-card-section>
       </q-card>
     </div>
 
-    <div v-if="isAdminLike && filteredMissionDeadlines.length" class="column q-gutter-sm q-mb-md">
-      <q-banner
-        v-for="row in filteredMissionDeadlines"
-        :key="`${row.mission_id}-${row.level}`"
-        rounded
-        dense
-        :class="row.bannerClass"
-      >
-        <template #avatar>
-          <q-icon size="sm" :name="row.icon" :color="row.iconColor" />
-        </template>
-        <div class="row items-center justify-between mission-banner-head">
-          <div class="text-weight-medium">{{ row.mission_name }}</div>
-          <q-btn
-            v-if="stats.role === 'admin' && Number(row.status) === 1"
-            flat
-            dense
-            color="negative"
-            label="Marquer finie"
-            @click="finishMission(row.mission_id)"
-          />
-        </div>
-        <div class="text-caption">
-          Société : {{ row.company_name }} — Échéance : {{ formatDeadlineLabel(row.end_date) }} —
-          {{ row.label }}
-        </div>
-      </q-banner>
+    <!-- Tab: Suivi (Admin only) -->
+    <div v-show="isAdminLike && currentTab === 'suivi'">
+      <q-card v-if="dailyTimesheetDatesDesc.length" class="gt-card gt-enter-up">
+        <q-card-section>
+          <div class="text-subtitle1 q-mb-md">Suivi des feuilles de temps</div>
+          <div class="text-caption q-mb-md">
+            Tableau de suivi des {{ dailyTimesheetDatesDesc.length }} derniers jours. Vert = Temps
+            saisi, Rouge = Absence de feuille de temps.
+          </div>
+          <div class="gt-table-mobile">
+            <q-markup-table
+              flat
+              bordered
+              wrap-cells
+              class="report-table timesheet-matrix suivi-matrix"
+            >
+              <thead>
+                <tr>
+                  <th class="collaborateur-header">Collaborateur</th>
+                  <th v-for="date in dailyTimesheetDatesDesc" :key="date" class="date-header">
+                    {{ formatDateDisplay(date) }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in dailyTimesheetRowsDesc" :key="row.user_id">
+                  <td class="collaborateur-cell">
+                    {{ row.user_name }}
+                    <span v-if="row.user_role">({{ row.user_role }})</span>
+                  </td>
+                  <td
+                    v-for="cell in row.cells || []"
+                    :key="`${row.user_id}-${cell.work_date}`"
+                    :class="{
+                      'timesheet-present': cell.total_hours > 0,
+                      'timesheet-missing': cell.total_hours === 0,
+                    }"
+                    class="timesheet-cell"
+                  >
+                    {{ cell.total_hours > 0 ? decimalHoursToHHMM(cell.total_hours) : '—' }}
+                  </td>
+                </tr>
+              </tbody>
+            </q-markup-table>
+          </div>
+        </q-card-section>
+      </q-card>
+      <q-card v-else class="gt-card">
+        <q-card-section>
+          <div class="text-subtitle1">Aucune donnée disponible</div>
+          <p class="text-grey-7">Aucune feuille de temps n'a été saisie pour l'instant.</p>
+        </q-card-section>
+      </q-card>
     </div>
-
-    <q-card class="q-mb-md gt-card gt-enter-up gt-delay-1">
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-md">
-          {{
-            useTraceBarChart
-              ? 'Activités récentes (projet, durée, auteur)'
-              : isAdminLike
-                ? 'Évolution des heures par mission'
-                : 'Évolution des heures'
-          }}
-        </div>
-        <p v-if="!hasAnyChart" class="text-grey-7 text-body2">Aucune donnée pour ce profil.</p>
-        <div v-else-if="useTraceBarChart" class="chart-wrap">
-          <Bar :data="adminBarChartData" :options="adminBarChartOptions" />
-        </div>
-        <div v-else class="chart-wrap">
-          <Line :data="lineChartData" :options="lineChartOptions" />
-        </div>
-      </q-card-section>
-    </q-card>
-
-    <q-card
-      v-if="isAdminLike && filteredTaskTraces.length"
-      class="q-mb-md gt-card gt-enter-up gt-delay-2"
-    >
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">Traces détaillées des tâches</div>
-        <q-list separator>
-          <q-item
-            v-for="(trace, idx) in paginatedTaskTraces"
-            :key="`trace-${idx}`"
-            class="gt-list-item"
-          >
-            <q-item-section>
-              <q-item-label>
-                {{ trace.user_name }} / {{ trace.user_role }} / {{ trace.user_email }} —
-                {{ trace.task_name }}
-              </q-item-label>
-              <q-item-label caption>
-                {{ trace.work_date }} | {{ trace.company_name }} | {{ trace.mission_name }}
-              </q-item-label>
-            </q-item-section>
-            <q-item-section side>{{ decimalHoursToHHMM(trace.duration_hours) }}</q-item-section>
-          </q-item>
-        </q-list>
-        <q-pagination
-          v-if="taskTracesPageCount > 1"
-          v-model="taskTracesPage"
-          :max="taskTracesPageCount"
-          max-pages="5"
-          boundary-numbers
-          class="q-mt-sm"
-        />
-      </q-card-section>
-    </q-card>
-
-    <q-card v-if="isAdminLike && filteredWeeklyMissionSummaries.length" class="q-mb-md gt-card">
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">Résumé missions hebdomadaire</div>
-        <q-list separator>
-          <q-item v-for="(item, idx) in paginatedWeeklyMissionSummaries" :key="`wk-${idx}`">
-            <q-item-section>
-              <q-item-label>{{ item.mission_name }} — {{ item.company_name }}</q-item-label>
-              <q-item-label caption
-                >Semaine: {{ item.period_start }} | Participants:
-                {{ item.participants_count }}</q-item-label
-              >
-            </q-item-section>
-            <q-item-section side>{{ decimalHoursToHHMM(item.total_hours) }}</q-item-section>
-          </q-item>
-        </q-list>
-        <q-pagination
-          v-if="weeklyMissionPageCount > 1"
-          v-model="weeklyMissionPage"
-          :max="weeklyMissionPageCount"
-          max-pages="5"
-          boundary-numbers
-          class="q-mt-sm"
-        />
-      </q-card-section>
-    </q-card>
-
-    <q-card v-if="isAdminLike && filteredMonthlyMissionSummaries.length" class="q-mb-md gt-card">
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">Résumé missions mensuel</div>
-        <q-list separator>
-          <q-item v-for="(item, idx) in paginatedMonthlyMissionSummaries" :key="`mo-${idx}`">
-            <q-item-section>
-              <q-item-label>{{ item.mission_name }} — {{ item.company_name }}</q-item-label>
-              <q-item-label caption
-                >Mois: {{ item.period_start }} | Participants:
-                {{ item.participants_count }}</q-item-label
-              >
-            </q-item-section>
-            <q-item-section side>{{ decimalHoursToHHMM(item.total_hours) }}</q-item-section>
-          </q-item>
-        </q-list>
-        <q-pagination
-          v-if="monthlyMissionPageCount > 1"
-          v-model="monthlyMissionPage"
-          :max="monthlyMissionPageCount"
-          max-pages="5"
-          boundary-numbers
-          class="q-mt-sm"
-        />
-      </q-card-section>
-    </q-card>
-
-    <q-card
-      v-if="stats.role === 'collaborateur' && stats.collaboratorStats?.missionContributions?.length"
-      class="q-mb-md gt-card"
-    >
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">Mes contributions par mission</div>
-        <q-list separator>
-          <q-item v-for="m in stats.collaboratorStats.missionContributions" :key="m.mission_id">
-            <q-item-section>
-              <q-item-label>{{ m.mission_name || 'Sans mission' }}</q-item-label>
-              <q-item-label caption>{{ m.company_name }}</q-item-label>
-            </q-item-section>
-            <q-item-section side>{{ decimalHoursToHHMM(m.total_hours) }}</q-item-section>
-          </q-item>
-        </q-list>
-      </q-card-section>
-    </q-card>
-
-    <q-card
-      v-if="isAdminLike && filteredTopMissions.length"
-      class="q-mb-md gt-card gt-enter-up gt-delay-2"
-    >
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">Top missions</div>
-        <q-markup-table flat bordered dense class="gt-table-aligned gt-table-mobile">
-          <thead>
-            <tr>
-              <th>Mission</th>
-              <th>Société</th>
-              <th>Participants</th>
-              <th>Total heures</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="m in paginatedTopMissions" :key="m.mission_id">
-              <td>{{ m.mission_name }}</td>
-              <td>{{ m.company_name }}</td>
-              <td>{{ m.participants_count }}</td>
-              <td>{{ decimalHoursToHHMM(m.total_hours) }}</td>
-            </tr>
-          </tbody>
-        </q-markup-table>
-        <q-pagination
-          v-if="topMissionsPageCount > 1"
-          v-model="topMissionsPage"
-          :max="topMissionsPageCount"
-          max-pages="5"
-          boundary-numbers
-          class="q-mt-sm"
-        />
-      </q-card-section>
-    </q-card>
-
-    <q-card
-      v-if="isAdminLike && filteredTopCollaborateurs.length"
-      class="q-mb-md gt-card gt-enter-up gt-delay-2"
-    >
-      <q-card-section>
-        <div class="text-subtitle1 q-mb-sm">Top collaborateurs</div>
-        <q-markup-table flat bordered dense class="gt-table-aligned gt-table-mobile">
-          <thead>
-            <tr>
-              <th>Nom</th>
-              <th>Email</th>
-              <th>Rôle</th>
-              <th>Total heures</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="u in paginatedTopCollaborateurs" :key="u.user_id">
-              <td>{{ u.user_name }}</td>
-              <td>{{ u.user_email }}</td>
-              <td>{{ u.user_role }}</td>
-              <td>{{ decimalHoursToHHMM(u.total_hours) }}</td>
-            </tr>
-          </tbody>
-        </q-markup-table>
-        <q-pagination
-          v-if="topCollaborateursPageCount > 1"
-          v-model="topCollaborateursPage"
-          :max="topCollaborateursPageCount"
-          max-pages="5"
-          boundary-numbers
-          class="q-mt-sm"
-        />
-      </q-card-section>
-    </q-card>
-
-    <q-card v-if="stats.topUsers?.length" class="q-mb-md gt-card gt-enter-up gt-delay-2">
-      <q-card-section>
-        <div class="text-subtitle1">Top utilisateurs</div>
-        <q-list separator>
-          <q-item v-for="user in stats.topUsers" :key="user.id" class="gt-list-item">
-            <q-item-section>{{ user.name }}</q-item-section>
-            <q-item-section side>{{ decimalHoursToHHMM(user.total_hours) }}</q-item-section>
-          </q-item>
-        </q-list>
-      </q-card-section>
-    </q-card>
-
-    <q-card v-if="stats.topTasks?.length" class="gt-card gt-enter-up gt-delay-3">
-      <q-card-section>
-        <div class="text-subtitle1">Top tâches</div>
-        <q-list separator>
-          <q-item
-            v-for="task in stats.topTasks"
-            :key="task.task_name || task.id"
-            class="gt-list-item"
-          >
-            <q-item-section>{{ task.name || task.task_name }}</q-item-section>
-            <q-item-section side>{{ decimalHoursToHHMM(task.total_hours) }}</q-item-section>
-          </q-item>
-        </q-list>
-      </q-card-section>
-    </q-card>
   </q-page>
 </template>
 
@@ -338,7 +404,22 @@ const stats = ref({
   printMode: { available: false, sections: [] },
 })
 
+const currentTab = ref('accueil')
+
 const isAdminLike = computed(() => ['admin', 'expert_comptable'].includes(stats.value.role))
+
+const dailyTimesheetMatrix = computed(
+  () => stats.value?.dailyTimesheetMatrix || { dates: [], rows: [] },
+)
+const dailyTimesheetDates = computed(() => dailyTimesheetMatrix.value.dates || [])
+const dailyTimesheetRows = computed(() => dailyTimesheetMatrix.value.rows || [])
+const dailyTimesheetDatesDesc = computed(() => [...dailyTimesheetDates.value].reverse())
+const dailyTimesheetRowsDesc = computed(() =>
+  dailyTimesheetRows.value.map((row) => ({
+    ...row,
+    cells: [...(row.cells || [])].reverse(),
+  })),
+)
 
 const searchQuery = ref('')
 const pageSize = 10
@@ -533,6 +614,16 @@ function formatDeadlineLabel(iso) {
   const d = new Date(String(iso).includes('T') ? iso : `${iso}T12:00:00`)
   if (Number.isNaN(d.getTime())) return String(iso)
   return d.toLocaleDateString('fr-FR')
+}
+
+/** Format date from YYYY-MM-DD to a more readable format */
+function formatDateDisplay(dateStr) {
+  if (!dateStr) return ''
+  const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) {
+    return `${m[3]}/${m[2]}`
+  }
+  return String(dateStr)
 }
 
 /** Affichage court des dates type YYYY-MM-DD (graphique admin). */
@@ -786,7 +877,9 @@ const lineChartOptions = computed(() => {
 const loadDashboard = async () => {
   try {
     const response = await api.get('/dashboard')
-    stats.value = response.data
+    if (response && response.data) {
+      stats.value = response.data
+    }
   } catch (error) {
     console.error('Dashboard error:', error)
   }
@@ -813,6 +906,10 @@ onMounted(() => {
 
 .chart-wrap {
   height: 360px;
+}
+
+.gt-tabs {
+  border-bottom: 2px solid rgba(148, 163, 184, 0.2);
 }
 
 .gt-table-aligned :deep(th),
@@ -859,5 +956,65 @@ onMounted(() => {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
+}
+
+.timesheet-matrix :deep(td.timesheet-present) {
+  background: #dcfce7;
+  color: #15803d;
+  font-weight: 500;
+  text-align: center;
+}
+
+.timesheet-matrix :deep(td.timesheet-missing) {
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 500;
+  text-align: center;
+}
+
+.timesheet-matrix :deep(th) {
+  white-space: nowrap;
+  text-align: center;
+}
+
+.suivi-matrix :deep(th.date-header) {
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  padding: 8px 4px;
+}
+
+.suivi-matrix :deep(th.collaborateur-header) {
+  white-space: nowrap;
+  text-align: left;
+}
+
+.suivi-matrix :deep(td.collaborateur-cell) {
+  font-weight: 600;
+  text-align: left;
+  background: rgba(148, 163, 184, 0.08);
+  white-space: nowrap;
+}
+
+.suivi-matrix :deep(td.timesheet-cell) {
+  text-align: center;
+  min-width: 60px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.suivi-matrix :deep(td.timesheet-cell:hover) {
+  transform: scale(1.05);
+}
+
+.suivi-matrix :deep(td.timesheet-present) {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #166534;
+}
+
+.suivi-matrix :deep(td.timesheet-missing) {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #7f1d1d;
 }
 </style>

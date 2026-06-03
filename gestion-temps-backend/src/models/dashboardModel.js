@@ -304,6 +304,57 @@ const getMissionDeadlines = async () => {
   return result.rows;
 };
 
+const getDailyTimesheetMatrix = async ({ days = 14 }) => {
+  const result = await pool.query(
+    `WITH dates AS (
+       SELECT generate_series(current_date - ($1::int - 1) * interval '1 day', current_date, '1 day')::date AS work_date
+     )
+     SELECT
+       u.id AS user_id,
+       COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.name)), ''), u.email) AS user_name,
+       u.role AS user_role,
+       dates.work_date::text AS work_date,
+       COALESCE(SUM(EXTRACT(EPOCH FROM (wh.end_time - wh.start_time))/3600), 0)::float AS total_hours
+     FROM users u
+     CROSS JOIN dates
+     LEFT JOIN work_hours wh ON wh.user_id = u.id AND wh.work_date = dates.work_date
+     WHERE u.role != 'admin'
+     GROUP BY u.id, u.first_name, u.name, u.email, u.role, dates.work_date
+     ORDER BY COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.name)), ''), u.email) ASC, dates.work_date ASC`,
+    [days],
+  );
+
+  const rows = result.rows.map((row) => ({
+    user_id: row.user_id,
+    user_name: row.user_name,
+    user_role: row.user_role,
+    work_date: row.work_date,
+    total_hours: Number(row.total_hours || 0),
+  }));
+
+  const dates = [...new Set(rows.map((row) => row.work_date))];
+  const usersMap = new Map();
+  for (const row of rows) {
+    if (!usersMap.has(row.user_id)) {
+      usersMap.set(row.user_id, {
+        user_id: row.user_id,
+        user_name: row.user_name,
+        user_role: row.user_role,
+        cells: [],
+      });
+    }
+    usersMap.get(row.user_id).cells.push({
+      work_date: row.work_date,
+      total_hours: row.total_hours,
+    });
+  }
+
+  return {
+    dates,
+    rows: [...usersMap.values()],
+  };
+};
+
 const getScopedTaskTraces = async ({ userId, role }) => {
   const normalizedRole = normalizeRole(role);
   if (normalizedRole === "secretaire") {
@@ -464,6 +515,7 @@ const getRoleDashboard = async ({ userId, role }) => {
       topMissions,
       topCollaborateurs,
       missionDeadlines,
+      dailyTimesheetMatrix: await getDailyTimesheetMatrix({ days: 14 }),
       printMode: {
         available: true,
         reportLinks: true,
